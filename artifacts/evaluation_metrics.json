@@ -1,33 +1,33 @@
 {
-  "dataset": "IBM TabFormer - Test Set 2019",
-  "total_test_samples": 168316,
+  "dataset": "IBM TabFormer - Test Set 2019 (Prevalencia Natural)",
+  "total_test_samples": 1639673,
   "total_frauds": 2033,
-  "fraud_prevalence_pct": 1.2078471446564794,
+  "fraud_prevalence_pct": 0.12398813665895578,
   "baseline_logistic_regression": {
-    "accuracy": 0.725385584258181,
-    "precision": 0.030613328801172696,
+    "accuracy": 0.7256922569317175,
+    "precision": 0.0031977879562562136,
     "recall": 0.7088047220855878,
-    "f1_score": 0.05869175627240143,
+    "f1_score": 0.006366851722164907,
     "confusion_matrix": {
-      "tn": 120653,
-      "fp": 45630,
+      "tn": 1188457,
+      "fp": 449183,
       "fn": 592,
       "tp": 1441,
-      "total": 168316
+      "total": 1639673
     },
-    "false_positive_rate": 0.2744116957235556,
+    "false_positive_rate": 0.27428677853496497,
     "false_negative_rate": 0.2911952779144122,
-    "pr_auc": 0.04701181353560184,
-    "roc_auc": 0.7944509579300444
+    "pr_auc": 0.004999535586026412,
+    "roc_auc": 0.7938442776753605
   },
   "comparative_linear_regression": {
-    "mse": 0.011720908592152275,
-    "rmse": 0.10826314512405538,
-    "mae": 0.02073485917642798,
-    "r2_score": 0.01773910980765525,
-    "pred_min": -0.017819404126747707,
-    "pred_max": 0.1626800767567725,
-    "predictions_outside_0_1_count": 30505,
-    "predictions_outside_0_1_pct": 18.123648375674325
+    "mse": 0.001482497634966829,
+    "rmse": 0.03850321590421804,
+    "mae": 0.013145519514987982,
+    "r2_score": -0.19716133981815287,
+    "pred_min": -0.02912140086760557,
+    "pred_max": 0.3843263235857988,
+    "predictions_outside_0_1_count": 291672,
+    "predictions_outside_0_1_pct": 17.78842488715738
   }
 }

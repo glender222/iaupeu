@@ -1,5 +1,6 @@
 """
 Script para generar y ejecutar 02_exploracion/analisis_exploratorio.ipynb de forma reproducible.
+Incluye la auditoría empírica real de importes negativos y cero.
 """
 
 from pathlib import Path
@@ -23,7 +24,7 @@ cells.append(nbf.v4.new_markdown_cell("""# 02. Análisis Exploratorio de Datos (
 1. Analizar las dimensiones, tipos de datos y consistencia del dataset con Polars.
 2. Cuantificar el desbalance severo de la variable objetivo `Is Fraud?`.
 3. Evaluar los valores ausentes por columna y entender su significado de negocio (`Errors?`, `Zip`, `Merchant State`).
-4. Investigar la distribución de importes (`Amount`), identificando y explicando importes negativos (devoluciones).
+4. Investigar la distribución de importes (`Amount`), auditando rigurosamente importes negativos (reembolsos/reversos) y nulos.
 5. Analizar modalidades de pago (`Use Chip`) y categorías comerciales (`MCC`) en relación con el riesgo de fraude.
 6. Estudiar la dinámica temporal (años 1991–2020 y patrones horarios intradía).
 7. Documentar hallazgos, limitaciones y decisiones que fundamentarán el preprocesamiento.
@@ -159,9 +160,9 @@ cells.append(nbf.v4.new_markdown_cell("""> **Interpretación de Valores Faltante
 > 2. `Zip` (11.8%) y `Merchant State` (11.2%): Los valores ausentes coinciden primordialmente con transacciones en línea (`Online Transaction`) o comercios internacionales donde no existe código postal ni estado estadounidense registrado. Deben ser imputados con categorías semánticas como `"ONLINE"` o `"MISSING"`.
 """))
 
-# Celda 6: Distribución de Importes y Valores Negativos
-cells.append(nbf.v4.new_markdown_cell("""## 4. Distribución de Importes (`Amount`) y Análisis de Devoluciones
-Sanitizamos la columna de texto eliminando el símbolo de divisa `$` y evaluamos su distribución estadística.
+# Celda 6: Distribución de Importes y Auditoría Real de Negativos
+cells.append(nbf.v4.new_markdown_cell("""## 4. Distribución de Importes (`Amount`) y Auditoría de Importes Negativos y Cero
+Sanitizamos la columna de texto eliminando el símbolo de divisa `$` y evaluamos su distribución estadística, prestando especial atención al cruce real con la variable de fraude.
 """))
 
 cells.append(nbf.v4.new_code_cell("""amt_expr = clean_amount_expr("Amount")
@@ -176,36 +177,53 @@ amt_stats = lf.select([
     amt_expr.max().alias("max"),
     (amt_expr < 0).sum().alias("conteo_negativos"),
     ((amt_expr < 0).sum() / total_rows * 100).round(3).alias("pct_negativos"),
+    (amt_expr == 0).sum().alias("conteo_cero"),
 ]).collect()
 
 print("Estadísticas Globales de Importe ($):")
 print(amt_stats)
 
-# Comparación estadística entre Legítimas y Fraude
-amt_by_fraud = (
-    lf.with_columns(amt_expr.alias("Amount_Num"))
-    .group_by("Is Fraud?")
-    .agg([
-        pl.len().alias("count"),
-        pl.col("Amount_Num").min().alias("min"),
-        pl.col("Amount_Num").median().alias("mediana"),
-        pl.col("Amount_Num").mean().round(2).alias("media"),
-        pl.col("Amount_Num").quantile(0.95).round(2).alias("q95"),
-        pl.col("Amount_Num").max().alias("max"),
-        (pl.col("Amount_Num") < 0).sum().alias("negativos"),
+# Auditoría empírica del cruce de Importe vs Is Fraud?
+amt_cohorts = (
+    lf.with_columns([
+        amt_expr.alias("Amount_Num"),
+        (pl.col("Is Fraud?") == "Yes").cast(pl.Int32).alias("is_fraud_bin")
     ])
+    .with_columns(
+        pl.when(pl.col("Amount_Num").is_null()).then(pl.lit("Nulos / No convertibles"))
+        .when(pl.col("Amount_Num") < 0).then(pl.lit("Amount < 0"))
+        .when(pl.col("Amount_Num") == 0).then(pl.lit("Amount == 0"))
+        .otherwise(pl.lit("Amount > 0"))
+        .alias("grupo_importe")
+    )
+    .group_by("grupo_importe")
+    .agg([
+        pl.len().alias("total_transacciones"),
+        pl.col("is_fraud_bin").sum().alias("total_fraudes"),
+        (pl.len() - pl.col("is_fraud_bin").sum()).alias("total_legitimas"),
+    ])
+    .with_columns([
+        (pl.col("total_fraudes") / pl.col("total_transacciones") * 100).round(4).alias("tasa_fraude_pct"),
+        (pl.col("total_transacciones") / total_rows * 100).round(3).alias("pct_del_total")
+    ])
+    .sort("total_transacciones", descending=True)
     .collect()
 )
 
-print("\\nComparación de Importes por Clase:")
-print(amt_by_fraud)
+print("\\nAuditoría Empírica de Importes vs Fraude:")
+print(amt_cohorts)
 """))
 
-cells.append(nbf.v4.new_markdown_cell("""> **Hallazgo Crítico sobre Importes:**
-> - Se identifican **1,244,683 transacciones con importes negativos** (mínimo -500.00), equivalentes al **5.1%** del dataset.
-> - En la operativa de tarjetas de crédito, los importes negativos corresponden a **abonos, devoluciones de compra y reembolsos por aclaraciones**.
-> - Notablemente, en el subconjunto de transacciones marcadas como fraude (`Is Fraud? == Yes`), **ninguna transacción tiene importe negativo** (conteo de negativos = 0). El fraude se concentra en cargos no autorizados de compra.
-> - **Decisión para el preprocesamiento:** Para el modelado de detección de compras fraudulentas, las transacciones negativas deben ser filtradas o tratadas como una población operativa distinta, evitando distorsionar los estimadores estadísticos de compra.
+cells.append(nbf.v4.new_markdown_cell("""> **Hallazgo Empírico y Decisión Metodológica Fundamental:**
+> - El dataset contiene **1,244,683 transacciones con importe negativo** (5.10%) y **20,213 transacciones con importe cero** (0.08%).
+> - **Cruce real con Fraude:**
+>   - En `Amount < 0`, existen **1,125 transacciones etiquetadas como fraude** (tasa de 0.0904%).
+>   - En `Amount == 0`, existen **13 fraudes** (tasa de 0.0643%).
+>   - En `Amount > 0`, existen **28,619 fraudes** (tasa de 0.1238%).
+> - **Significado Financiero:** En la operativa bancaria con tarjetas de crédito, los importes negativos corresponden a **reembolsos, contracargos (*chargebacks*) y reversos contables**. Los fraudes en devoluciones responden a tipologías operativas distintas (e.g. *refund fraud*, colusión de comercio) que no siguen la dinámica de una autorización de compra.
+> - **Definición del Alcance del Modelo Supervisado:**
+>   - El alcance de los clasificadores supervisados (Unidad 1 y Unidad 2) es la cohorte de **compras con cargo positivo (`Amount > 0`)**.
+>   - Las operaciones con `Amount <= 0` se separan para auditoría y reglas de negocio dedicadas. En el pipeline de inferencia, cualquier transacción con `Amount <= 0` será catalogada con la etiqueta de excepción `OUT_OF_COHORT_REVIEW`.
 """))
 
 # Celda 7: Frecuencia de Modalidades de Pago (Use Chip)
@@ -311,7 +329,7 @@ cells.append(nbf.v4.new_markdown_cell("""## 7. Síntesis de Hallazgos y Decision
 | Aspecto Analizado | Hallazgo Empírico | Decisión Metodológica para Preprocesamiento |
 |---|---|---|
 | **Desbalance Objetivo** | Prevalencia de 0.122% (29,757 fraudes en 24.38M filas). | Usar `class_weight='balanced'` en Regresión Logística y evaluar con PR-AUC y F1-Score en lugar de Accuracy. |
-| **Importes Negativos** | 1,244,683 transacciones negativas (devoluciones). Cero fraudes en importes negativos. | Excluir transacciones de reembolso para modelar riesgo de compras/cargos no autorizados. |
+| **Auditoría de Importes** | 1,244,683 negativos (1,125 fraudes) y 20,213 ceros (13 fraudes). | Definir cohorte de compras (`Amount > 0`) para modelos supervisados; separar reembolsos para reglas de auditoría y marcar `OUT_OF_COHORT_REVIEW` en inferencia. |
 | **Columna `Errors?`** | 98.4% nulos; describe fallos generados durante o post-liquidación. | Excluir del baseline para evitar fuga de datos (Data Leakage) hacia el modelo. |
 | **Canal `Use Chip`** | Mayor riesgo relativo en `Online Transaction` y `Swipe`. | Codificar mediante One-Hot Encoding en el pipeline de scikit-learn. |
 | **Componente Temporal** | Picos de fraude en horarios nocturnos (01:00 a 05:00). | Extraer `hour`, `minute`, `day_of_week` y construir indicador de nocturnidad `is_night`. |

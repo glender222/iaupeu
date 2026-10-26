@@ -1,13 +1,14 @@
 """
 Utilidades compartidas para procesamiento de datos, transformaciones e inspección estadística.
-Diseñado para operaciones Lazy eficientes en Polars y evaluación en scikit-learn.
+Diseñado para operaciones Lazy eficientes en Polars, pipelines scikit-learn y métricas
+tanto de la Unidad 1 como de la Unidad 2.
 """
 
 from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import joblib
 import numpy as np
@@ -101,24 +102,48 @@ def extract_temporal_features(lf_or_df: Union[pl.LazyFrame, pl.DataFrame]) -> Un
     - minute (0-59)
     - day_of_week (1=Lunes, 7=Domingo)
     - is_weekend (0/1)
-    - is_night (1 si hora entre 0 y 6, 0 en otro caso)
+    - is_night (1 si hora entre 0 y 5, 0 en otro caso)
     """
-    # Parsing de Time (HH:MM)
     time_split = pl.col("Time").str.split(":")
     hour_expr = time_split.list.get(0).cast(pl.Int32).alias("hour")
     min_expr = time_split.list.get(1).cast(pl.Int32).alias("minute")
 
-    # Construcción de fecha para obtener día de semana
     date_expr = pl.date(pl.col("Year"), pl.col("Month"), pl.col("Day"))
     dow_expr = date_expr.dt.weekday().alias("day_of_week")
 
-    # Indicadores
     weekend_expr = pl.col("day_of_week").is_in([6, 7]).cast(pl.Int32).alias("is_weekend")
     night_expr = pl.col("hour").is_between(0, 5, closed="both").cast(pl.Int32).alias("is_night")
 
     res = lf_or_df.with_columns([hour_expr, min_expr, dow_expr])
     res = res.with_columns([weekend_expr, night_expr])
     return res
+
+
+def add_u2_engineered_features(lf_or_df: Union[pl.LazyFrame, pl.DataFrame]) -> Union[pl.LazyFrame, pl.DataFrame]:
+    """
+    Construye las variables de ingeniería de características requeridas para la Unidad 2:
+    - amount_log: log1p(Amount)
+    - hour_sin: sin(2 * pi * hour / 24)
+    - hour_cos: cos(2 * pi * hour / 24)
+    - is_online: indicador categórico basado en Merchant State == 'ONLINE' o Use Chip == 'Online Transaction'
+    """
+    # Expresión de logaritmo monetario (asume Amount > 0)
+    log_amt = (pl.col("Amount").clip(lower_bound=0.0) + 1.0).log().alias("amount_log")
+
+    # Expresiones cíclicas horarias
+    h_rad = pl.col("hour").cast(pl.Float64) * 2.0 * np.pi / 24.0
+    h_sin = h_rad.sin().alias("hour_sin")
+    h_cos = h_rad.cos().alias("hour_cos")
+
+    # Indicador online
+    online_expr = (
+        pl.when((pl.col("Merchant State") == "ONLINE") | (pl.col("Use Chip") == "Online Transaction"))
+        .then(pl.lit("ONLINE"))
+        .otherwise(pl.lit("IN_PERSON"))
+        .alias("is_online")
+    )
+
+    return lf_or_df.with_columns([log_amt, h_sin, h_cos, online_expr])
 
 
 def compute_classification_metrics(

@@ -1,5 +1,6 @@
 """
 Script para generar y ejecutar 03_preprocesamiento/transformacion.ipynb de forma reproducible.
+Ajusta el ColumnTransformer en el nuevo Train Split (2017-2018) y genera el lote de inferencia con casos de borde.
 """
 
 from pathlib import Path
@@ -14,24 +15,23 @@ cells = []
 # Header Markdown
 cells.append(nbf.v4.new_markdown_cell("""# 04. Transformación de Características y Preprocesador — IBM TabFormer
 **Unidad 1:** Detección de Fraude en Transacciones con Tarjeta de Crédito  
-**Dataset:** IBM TabFormer (`clean_transactions.parquet`)  
+**Dataset:** Particiones Temporales (`train_split.parquet` y `test_split.parquet`)  
 **Entorno:** Python 3.12 | Polars | scikit-learn | Joblib
 
 ---
 
 ### Objetivos del Notebook:
-1. Cargar el dataset limpio y sanitizado desde `data/processed/clean_transactions.parquet`.
-2. Categorizar los códigos comerciales `MCC` en macro-sectores interpretables según estándares ISO.
+1. Cargar las particiones temporales estrictas generadas en limpieza:
+   - **Train (2017–2018):** 352,670 transacciones de compra.
+   - **Test (2019):** 1,639,673 transacciones con **prevalencia natural de 0.124%**.
+2. Categorizar los códigos comerciales `MCC` en macro-sectores interpretables según estándares ISO 18245.
 3. Separar formalmente los identificadores (`User`, `Card`, `Merchant Name`), predictores y la variable objetivo (`is_fraud`).
-4. Aplicar una **partición temporal estricta**:
-   - **Entrenamiento (Train):** Años 2017 y 2018.
-   - **Evaluación (Test):** Año 2019.
-5. Construir un pipeline modular de transformación con `ColumnTransformer`:
+4. Construir un pipeline modular de transformación con `ColumnTransformer`:
    - Escalado de variables numéricas con `StandardScaler`.
    - Codificación One-Hot de variables categóricas con `OneHotEncoder(handle_unknown='ignore')`.
-6. Ajustar (`fit`) el preprocesador **exclusivamente con el conjunto de entrenamiento**, evitando cualquier fuga de información hacia el conjunto de prueba.
-7. Serializar el artefacto ajustado en `artifacts/preprocessor.joblib`.
-8. Guardar las particiones en Parquet y generar un archivo de inferencia de prueba (`sample_inference.csv`) sin la etiqueta de fraude.
+5. Ajustar (`fit`) el preprocesador **exclusivamente con el conjunto de entrenamiento (2017–2018)**.
+6. Serializar el artefacto ajustado en `artifacts/preprocessor.joblib`.
+7. Generar un lote de inferencia (`sample_inference.csv`) sin etiqueta de fraude, incluyendo casos de borde (`Amount <= 0`) para validar la regla de excepción `OUT_OF_COHORT_REVIEW`.
 """))
 
 # Celda 1: Setup y rutas
@@ -47,7 +47,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from notebooks._comun.config import (
-    CLEAN_DATA_FILE,
     TRAIN_DATA_FILE,
     TEST_DATA_FILE,
     INFERENCE_SAMPLE_FILE,
@@ -61,30 +60,30 @@ from notebooks._comun.data_utils import categorize_mcc_expr, save_artifact
 print(f"Raíz del proyecto: {PROJECT_ROOT}")
 """))
 
-# Celda 2: Carga de datos limpios y enriquecimiento de MCC
+# Celda 2: Carga de particiones y enriquecimiento de MCC
 cells.append(nbf.v4.new_code_cell("""import polars as pl
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.pipeline import Pipeline
 
-# Cargar dataset limpio
-df = pl.read_parquet(CLEAN_DATA_FILE)
+# Carga de particiones temporales
+train_df = pl.read_parquet(TRAIN_DATA_FILE)
+test_df = pl.read_parquet(TEST_DATA_FILE)
 
-# Añadir categoría semántica de MCC
-df = df.with_columns(categorize_mcc_expr("MCC"))
+# Añadir macro-categoría de MCC
+train_df = train_df.with_columns(categorize_mcc_expr("MCC"))
+test_df = test_df.with_columns(categorize_mcc_expr("MCC"))
 
-print(f"Dataset cargado: {df.shape[0]:,} filas x {df.shape[1]} columnas")
-print("Distribución de macro-categorías de comercio (MCC):")
-print(df.group_by("mcc_category").len().sort("len", descending=True))
+print(f"Train Set (2017-2018): {train_df.shape[0]:,} transacciones | Fraudes: {train_df['is_fraud'].sum():,} ({train_df['is_fraud'].mean()*100:.3f}%)")
+print(f"Test Set  (2019):      {test_df.shape[0]:,} transacciones | Fraudes: {test_df['is_fraud'].sum():,} ({test_df['is_fraud'].mean()*100:.4f}% prevalencia natural)")
 """))
 
 # Celda 3: Tratamiento de Identificadores
 cells.append(nbf.v4.new_markdown_cell("""## 1. Tratamiento Metodológico de Identificadores
 Las columnas `User`, `Card` y `Merchant Name` son códigos identificadores discretos arbitrarios.
-- **Riesgo:** Si se tratan como números continuos, el modelo asumirá una relación de orden espuria (e.g. que un ID mayor implica más riesgo).
-- **Decisión:** Se excluyen de las variables predictoras del baseline de regresión logística, reservándolos únicamente como claves de agregación en etapas futuras.
+- **Riesgo:** Si se tratan como números continuos, el modelo asumirá una relación de orden espuria.
+- **Decisión:** Se excluyen de las variables predictoras del baseline, reservándolos como claves de trazabilidad.
 """))
 
 cells.append(nbf.v4.new_code_cell("""print("Predictores numéricos seleccionados:", NUMERICAL_FEATURES)
@@ -92,37 +91,15 @@ print("Predictores categóricos seleccionados:", CATEGORICAL_FEATURES)
 print("Total de variables explicativas:", len(SELECTED_FEATURES))
 """))
 
-# Celda 4: Partición Temporal Estricta
-cells.append(nbf.v4.new_markdown_cell("""## 2. Partición Temporal (Train / Test Split)
-Para simular el entorno real de una entidad bancaria donde el modelo se entrena en el histórico y predice transacciones futuras, dividimos por año:
-- **Train Set:** Transacciones de los años 2017 y 2018.
-- **Test Set:** Transacciones del año 2019.
-"""))
-
-cells.append(nbf.v4.new_code_cell("""train_df = df.filter(pl.col("Year").is_in([2017, 2018]))
-test_df = df.filter(pl.col("Year") == 2019)
-
-print(f"Entrenamiento (2017-2018): {train_df.shape[0]:,} transacciones | Fraudes: {train_df['is_fraud'].sum():,} ({train_df['is_fraud'].mean()*100:.3f}%)")
-print(f"Prueba / Test (2019):      {test_df.shape[0]:,} transacciones | Fraudes: {test_df['is_fraud'].sum():,} ({test_df['is_fraud'].mean()*100:.3f}%)")
-
-# Guardar splits en Parquet para consumo del entrenamiento y evaluación
-train_df.write_parquet(TRAIN_DATA_FILE, compression="snappy")
-test_df.write_parquet(TEST_DATA_FILE, compression="snappy")
-print("\\nParticiones temporales guardadas exitosamente en disco.")
-"""))
-
-# Celda 5: Construcción y Ajuste del Pipeline de Preprocesamiento
-cells.append(nbf.v4.new_markdown_cell("""## 3. Construcción y Ajuste del Preprocesador con scikit-learn
+# Celda 4: Construcción y Ajuste del Preprocesador
+cells.append(nbf.v4.new_markdown_cell("""## 2. Construcción y Ajuste del Preprocesador con scikit-learn
 Definimos un `ColumnTransformer` que estandariza las variables numéricas y aplica One-Hot Encoding a las variables categóricas.
-El preprocesador se ajusta (`fit`) **exclusivamente con los datos de entrenamiento**.
+El preprocesador se ajusta (`fit`) **exclusivamente con los datos de entrenamiento (2017–2018)**.
 """))
 
 cells.append(nbf.v4.new_code_cell("""# Conversión a Pandas para compatibilidad nativa con scikit-learn
 X_train_df = train_df.select(SELECTED_FEATURES).to_pandas()
 y_train = train_df["is_fraud"].to_numpy()
-
-X_test_df = test_df.select(SELECTED_FEATURES).to_pandas()
-y_test = test_df["is_fraud"].to_numpy()
 
 # Definición del transformador de columnas
 preprocessor = ColumnTransformer(
@@ -135,17 +112,16 @@ preprocessor = ColumnTransformer(
 
 # Ajuste ÚNICAMENTE en Train
 preprocessor.fit(X_train_df)
-print("Preprocesador ajustado exitosamente con X_train.")
+print("Preprocesador ajustado exitosamente con X_train (2017-2018).")
 
-# Verificación de nombres de columnas generadas
 feature_names_out = preprocessor.get_feature_names_out()
 print(f"Total de características transformadas: {len(feature_names_out)}")
 for name in feature_names_out:
     print(f"  - {name}")
 """))
 
-# Celda 6: Serialización del Preprocesador
-cells.append(nbf.v4.new_markdown_cell("""## 4. Serialización del Preprocesador
+# Celda 5: Serialización del Preprocesador
+cells.append(nbf.v4.new_markdown_cell("""## 3. Serialización del Preprocesador
 Guardamos el pipeline ajustado en `artifacts/preprocessor.joblib`.
 """))
 
@@ -153,22 +129,33 @@ cells.append(nbf.v4.new_code_cell("""save_artifact(preprocessor, PREPROCESSOR_AR
 print(f"Artefacto guardado exitosamente en: {PREPROCESSOR_ARTIFACT}")
 """))
 
-# Celda 7: Generación de Muestra de Inferencia (Sin etiqueta de fraude)
-cells.append(nbf.v4.new_markdown_cell("""## 5. Generación de Lote de Inferencia Desacoplado
-Generamos un CSV con transacciones de prueba (`sample_inference.csv`) simulando un lote en producción, asegurando que **no contenga la columna de fraude (`Is Fraud?`)**.
+# Celda 6: Generación de Muestra de Inferencia Desacoplada
+cells.append(nbf.v4.new_markdown_cell("""## 4. Generación de Lote de Inferencia Desacoplado
+Generamos un CSV con transacciones de prueba (`sample_inference.csv`) simulando un lote en producción:
+- **Estrictamente sin las columnas de etiqueta `Is Fraud?` ni `is_fraud`**.
+- Incluye 995 transacciones representativas de 2019.
+- Incorpora casos de borde con importes negativos y cero para validar la regla de excepción `OUT_OF_COHORT_REVIEW`.
 """))
 
-cells.append(nbf.v4.new_code_cell("""# Seleccionamos una muestra aleatoria del test set para inferencia
+cells.append(nbf.v4.new_code_cell("""# 1. Muestra normal de transacciones de 2019
+drop_cols = [c for c in ["Is Fraud?", "is_fraud"] if c in test_df.columns]
+sample_norm = test_df.sample(n=995, seed=RANDOM_STATE).drop(drop_cols)
+
+# 2. Casos de borde (reembolsos y cero) clonando 5 filas y modificando Amount para coincidencia de tipos
+border_cases = sample_norm.head(5).with_columns([
+    pl.Series("Amount", [-75.50, -150.00, 0.00, -25.00, 0.00])
+])
+
+# Concatenar y asignar transaction_id único
 inference_sample = (
-    test_df.sample(n=1000, seed=RANDOM_STATE)
+    pl.concat([sample_norm, border_cases])
     .with_columns(pl.int_range(1, 1001).alias("transaction_id"))
-    .drop(["Is Fraud?", "is_fraud"])  # ¡ESTRICTAMENTE SIN LA ETIQUETA!
 )
 
-# Guardar como CSV
 inference_sample.write_csv(INFERENCE_SAMPLE_FILE)
 print(f"Lote de inferencia generado en: {INFERENCE_SAMPLE_FILE}")
-print(f"Columnas en lote de inferencia: {inference_sample.columns}")
+print(f"Dimensiones: {inference_sample.shape[0]} filas x {inference_sample.shape[1]} columnas")
+print(f"Casos con Amount <= 0 para probar regla: {(inference_sample['Amount'] <= 0).sum()}")
 assert "Is Fraud?" not in inference_sample.columns and "is_fraud" not in inference_sample.columns
 print("Verificación confirmada: El archivo de inferencia NO contiene la columna objetivo.")
 """))

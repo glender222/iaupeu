@@ -81,8 +81,13 @@ notebooks/UNIDAD 1/
 ### 4.2 `02_exploracion/analisis_exploratorio.ipynb`
 - **Propósito:** Descubrir patrones de comportamiento, distribuciones y riesgos de negocio antes del modelado.
 - **Hallazgos Clave:**
-  - **Desbalance Extremo:** Prevalencia de solo 0.122%. Confirma que la métrica de *Accuracy* es engañosa.
-  - **Importes Negativos:** Se detectaron 1,244,683 transacciones con importe negativo (5.1%). Se comprobó que **0 fraudes tienen importe negativo**; corresponden a reembolsos o abonos.
+  - **Desbalance Extremo:** Prevalencia de solo 0.122% a nivel global. Confirma que la métrica de *Accuracy* es engañosa.
+  - **Auditoría Exhaustiva de Importes:** En las 24,386,900 transacciones crudas:
+    - `Amount > 0`: 23,122,004 transacciones (28,619 fraudes, 0.1238% prevalencia).
+    - `Amount < 0`: 1,244,683 transacciones (1,125 fraudes, 0.0904% prevalencia).
+    - `Amount == 0`: 20,213 transacciones (13 fraudes, 0.0643% prevalencia).
+    - Guardado en [`data/processed/auditoria_importes_y_etiquetas.csv`](../../data/processed/auditoria_importes_y_etiquetas.csv).
+    - **Decisión de Negocio y Alcance:** El modelado supervisado de compras directas se acota a transacciones con importe positivo ($> 0$). Las operaciones con importe $\le 0$ corresponden a devoluciones, abonos o autorizaciones nulas que no siguen la dinámica de compras no autorizadas y son derivadas operativamente a `OUT_OF_COHORT_REVIEW`.
   - **Valores Ausentes:** `Errors?` tiene 98.4% de nulos (lo normal en transacciones exitosas); `Zip` y `Merchant State` tienen ~11% de nulos asociados a transacciones por internet (`Online Transaction`).
   - **Patrón Horario:** La tasa de fraude alcanza su pico máximo en la madrugada (**01:00 a 05:00 horas**), cuando el volumen legítimo es mínimo.
 
@@ -90,24 +95,27 @@ notebooks/UNIDAD 1/
 - **Propósito:** Sanitizar los datos crudos y prevenir fugas de información.
 - **Decisiones Metodológicas:**
   - Conversión de `Amount` eliminando `$` y parseando a `Float64`.
-  - **Filtrado de importes negativos:** Se aíslan las compras positivas ($> 0$), ya que las devoluciones no representan cargos no autorizados.
+  - **Separación de cohorte positiva:** Se aíslan compras positivas ($> 0$) para el pipeline supervisado.
   - **Exclusión de `Errors?`:** Este campo contiene información post-autorización bancaria (`Bad PIN`, etc.). Incluirlo generaría **Target Leakage**.
   - Imputación semántica de nulos en geografía (`Merchant State` $\rightarrow$ `"ONLINE"`, `Zip` $\rightarrow$ `-1.0`).
   - Mapeo de variable objetivo: `Is Fraud?` (`No` $\rightarrow$ 0, `Yes` $\rightarrow$ 1).
-  - Exportación de muestra limpia y estratificada en formato Parquet comprimido con Snappy: [`clean_transactions.parquet`](../../data/processed/clean_transactions.parquet).
+  - Exportación de particiones y auditorías:
+    - [`data/processed/clean_transactions.parquet`](../../data/processed/clean_transactions.parquet)
+    - [`data/processed/auditoria_importes_y_etiquetas.csv`](../../data/processed/auditoria_importes_y_etiquetas.csv)
+    - [`data/processed/resumen_particiones.csv`](../../data/processed/resumen_particiones.csv)
 
 ### 4.4 `03_preprocesamiento/transformacion.ipynb`
-- **Propósito:** Construir variables explicativas, aplicar partición temporal y ajustar el pipeline de transformación.
+- **Propósito:** Construir variables explicativas, aplicar partición temporal cronológica y ajustar el pipeline de transformación.
 - **Ingeniería de Características:**
   - Temporales: `hour`, `minute`, `day_of_week`, `is_weekend`, `is_night`.
-  - Categóricas: Agrupamiento de códigos `MCC` en macro-sectores interpretables (Airlines, Lodging, Retail, etc.) según norma ISO 18245.
+  - Categóricas: Agrupamiento de códigos `MCC` en macro-sectores interpretables (`Restaurants_Dining`, `Supermarkets_Groceries`, `Airlines`, etc.) según norma ISO 18245.
   - Identificadores (`User`, `Card`, `Merchant Name`): Excluidos de transformaciones continuas para evitar relaciones de orden arbitrarias.
-- **Partición Temporal:**
-  - **Train:** Años 2017 y 2018.
-  - **Test:** Año 2019 (período futuro independiente).
+- **Partición Temporal Estricta:**
+  - **Train (Desarrollo):** Años 2017 y 2018 (252,670 registros: 2,670 fraudes correspondientes a todo 2017-2018 + 250,000 legítimas del período activo).
+  - **Test Independiente:** Año 2019 completo con **prevalencia natural representativa** (1,639,673 transacciones, 2,033 fraudes, 0.1240% prevalencia).
 - **Preprocesador scikit-learn:** `ColumnTransformer` combinando `StandardScaler` para numéricas y `OneHotEncoder(handle_unknown='ignore')` para categóricas.
 - **Ajuste:** `fit` aplicado **exclusivamente en Train** y serializado en [`artifacts/preprocessor.joblib`](../../artifacts/preprocessor.joblib).
-- Generación de lote de prueba sin etiqueta de fraude: [`sample_inference.csv`](../../data/processed/sample_inference.csv).
+- Generación de lote de prueba sin etiqueta de fraude con casos de frontera: [`data/processed/sample_inference.csv`](../../data/processed/sample_inference.csv).
 
 ### 4.5 `04_modelado/entrenamiento.ipynb`
 - **Propósito:** Ajustar los modelos supervisados de la Unidad 1 con parámetros reproducibles (`RANDOM_STATE = 42`).
@@ -118,21 +126,23 @@ notebooks/UNIDAD 1/
      - Serializado en [`artifacts/baseline_logistic_regression.joblib`](../../artifacts/baseline_logistic_regression.joblib).
   2. **Regresión Lineal (Comparativa Académica):**
      - Ajuste por mínimos cuadrados ordinarios ($OLS$) sobre la etiqueta $\{0, 1\}$.
+     - Demuestra la incapacidad estructural del modelo lineal para probabilidades acotadas $[0, 1]$.
      - Serializado en [`artifacts/linear_regression_comparison.joblib`](../../artifacts/linear_regression_comparison.joblib).
 
 ### 4.6 `04_modelado/evaluacion.ipynb`
-- **Propósito:** Evaluar los modelos sobre el conjunto de prueba temporal independiente (Año 2019: 168,316 transacciones, 2,033 fraudes).
+- **Propósito:** Evaluar los modelos sobre el conjunto de prueba temporal independiente (Año 2019: 1,639,673 transacciones con prevalencia natural 0.1240%, 2,033 fraudes).
 - **Resultados Cuantitativos Reales:**
 
 | Métrica de Evaluación | Regresión Logística (Baseline) | Regresión Lineal (OLS) |
 |---|---|---|
-| **Recall (Sensibilidad)** | **70.88%** (1,441 fraudes capturados) | N/A |
-| **ROC-AUC** | **0.7945** | N/A |
-| **PR-AUC (Average Precision)** | **0.0470** (vs 0.0121 aleatorio) | N/A |
-| **Precision** | **3.06%** | N/A |
-| **F1-Score** | **0.0587** | N/A |
-| **Accuracy** | **72.54%** | N/A |
-| **MSE / RMSE** | N/A | **0.0117** / **0.1083** |
+| **Recall (Sensibilidad)** | **71.22%** (1,448 fraudes capturados) | N/A |
+| **ROC-AUC** | **0.7953** | N/A |
+| **PR-AUC (Average Precision)** | **0.0051** (vs 0.00124 aleatorio) | N/A |
+| **Precision** | **0.34%** | N/A |
+| **F1-Score** | **0.0067** | N/A |
+| **Accuracy** | **74.15%** | N/A |
+| **MSE / RMSE** | N/A | **0.00124** / **0.0352** |
+| **Predicciones Negativas (< 0)** | 0% (sigmoide acotada) | **18.19%** (violación probabilística) |
 | **Predicciones Anómalas** | **0.00%** (probabilidades $[0, 1]$ válidas) | **18.12%** (30,505 predicciones $< 0$) |
 
 - **Matriz de Confusión (Regresión Logística):**

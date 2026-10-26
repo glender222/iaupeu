@@ -23,7 +23,12 @@ Se auditó el archivo `data/DATA IBM/card_transaction.v1.csv`, confirmando los s
 - **Volumen total:** **24,386,900 transacciones** y 15 columnas.
 - **Prevalencia de Fraude:** Se contabilizaron **29,757 fraudes** (0.122%) frente a **24,357,143 transacciones legítimas** (99.878%), reflejando un desbalance de clases extremo (1 fraude por cada ~820 transacciones).
 - **Cobertura Temporal:** Registros desde 1991 hasta 2020, con actividad de fraude concentrada entre los años 2000 y 2019.
-- **Importes Negativos:** Se detectaron **1,244,683 transacciones con importe negativo** (5.1% del total). Se verificó empíricamente que **ninguna transacción de fraude tiene importe negativo** (0 fraudes en negativos), confirmando que corresponden a reembolsos, abonos o reversos de liquidación.
+- **Auditoría Exhaustiva de Importes:** Se auditó la totalidad de transacciones, detectando:
+  - `Amount > 0`: 23,122,004 transacciones (28,619 fraudes, 0.1238% de prevalencia). Corresponde al universo de compras directas.
+  - `Amount < 0`: 1,244,683 transacciones (1,125 fraudes, 0.0904% de prevalencia). Corresponden a devoluciones y notas de crédito.
+  - `Amount == 0`: 20,213 transacciones (13 fraudes, 0.0643% de prevalencia).
+  - Guardado en `data/processed/auditoria_importes_y_etiquetas.csv`.
+  - Los modelos supervisados de compra se acotan a `Amount > 0`, mientras que transacciones con importe $\le 0$ son derivadas a `OUT_OF_COHORT_REVIEW` en inferencia.
 
 ---
 
@@ -34,41 +39,39 @@ Los siete notebooks fueron generados, ejecutados secuencialmente desde kernels l
 | # | Notebook | Ruta | Estado | Resumen de Salidas y Artefactos |
 |---|---|---|---|---|
 | **01** | `ingesta.ipynb` | `notebooks/UNIDAD 1/01_ingesta/` | **VALIDADO** | Inspección de 24.38M filas con Polars Lazy; genera `ingesta_resumen.json`. |
-| **02** | `analisis_exploratorio.ipynb` | `notebooks/UNIDAD 1/02_exploracion/` | **VALIDADO** | EDA exhaustivo, gráficos de desbalance, importes, modalidades y estacionalidad horaria. |
-| **03** | `limpieza.ipynb` | `notebooks/UNIDAD 1/03_preprocesamiento/` | **VALIDADO** | Sanitización de `Amount`, imputación de nulos, exclusión de `Errors?` y exportación a Parquet. |
+| **02** | `analisis_exploratorio.ipynb` | `notebooks/UNIDAD 1/02_exploracion/` | **VALIDADO** | EDA exhaustivo, gráficos de desbalance, auditoría de importes, modalidades y temporalidad. |
+| **03** | `limpieza.ipynb` | `notebooks/UNIDAD 1/03_preprocesamiento/` | **VALIDADO** | Sanitización de `Amount`, cohorte positiva, exclusión de `Errors?`, genera `resumen_particiones.csv`. |
 | **04** | `transformacion.ipynb` | `notebooks/UNIDAD 1/03_preprocesamiento/` | **VALIDADO** | Features temporales, partición temporal (Train 2017-18, Test 2019), fit de `preprocessor.joblib`. |
 | **05** | `entrenamiento.ipynb` | `notebooks/UNIDAD 1/04_modelado/` | **VALIDADO** | Ajuste de Regresión Logística (`class_weight='balanced'`) y Regresión Lineal comparativa. |
 | **06** | `evaluacion.ipynb` | `notebooks/UNIDAD 1/04_modelado/` | **VALIDADO** | Métricas en test set independiente (2019), curvas PR/ROC y análisis de la paradoja del Accuracy. |
-| **07** | `predicciones.ipynb` | `notebooks/UNIDAD 1/05_inferencia/` | **VALIDADO** | Scoring desacoplado sobre lote sin etiqueta de fraude; genera `inference_results.csv`. |
+| **07** | `predicciones.ipynb` | `notebooks/UNIDAD 1/05_inferencia/` | **VALIDADO** | Scoring desacoplado sobre lote sin etiqueta de fraude con `OUT_OF_COHORT_REVIEW`; genera `inference_results.csv`. |
 
 ---
 
 ## 4. Métricas Obtenidas en el Conjunto de Prueba Independiente (Test 2019)
 
-La evaluación se realizó sobre **168,316 transacciones** del año 2019 (período temporal no visto durante el entrenamiento), conteniendo **2,033 fraudes reales** (prevalencia de 1.21% en el período evaluado).
+La evaluación se realizó sobre **1,639,673 transacciones** del año 2019 con **prevalencia natural representativa (0.1240%)**, conteniendo **2,033 fraudes reales**.
 
 ### 4.1 Modelo Baseline Principal: Regresión Logística
 
-- **Recall (Sensibilidad):** **70.88%** $\rightarrow$ Logra interceptar **1,441 de los 2,033 fraudes**.
-- **ROC-AUC:** **0.7945** $\rightarrow$ Capacidad discriminante sólida para un modelo lineal simple.
-- **Precision:** **3.06%** $\rightarrow$ Consecuencia directa del peso balanceado (`class_weight='balanced'`) en un modelo lineal, priorizando no dejar pasar fraudes a costa de generar falsas alarmas que el analista filtra.
-- **F1-Score:** **0.0587**.
-- **PR-AUC (Average Precision):** **0.0470** (superior a la línea base aleatoria de 0.0121).
-- **Accuracy:** **72.54%** $\rightarrow$ Demuestra la **Paradoja de la Exactitud**: un modelo ingenuo que predijera siempre "No Fraude" tendría 98.79% de Accuracy pero capturaría 0 fraudes.
+- **Recall (Sensibilidad):** **71.22%** $\rightarrow$ Logra interceptar **1,448 de los 2,033 fraudes**.
+- **ROC-AUC:** **0.7953** $\rightarrow$ Capacidad discriminante sólida para un modelo lineal simple.
+- **Precision:** **0.34%** $\rightarrow$ Consecuencia directa del peso balanceado (`class_weight='balanced'`) frente a una prevalencia natural de 0.124%, priorizando no dejar pasar fraudes a costa de falsas alarmas que el analista filtra.
+- **F1-Score:** **0.0067**.
+- **PR-AUC (Average Precision):** **0.0051** (4.1 veces superior a la línea base aleatoria de 0.00124).
+- **Accuracy:** **74.15%** $\rightarrow$ Demuestra la **Paradoja de la Exactitud**: un modelo ingenuo que predijera siempre "No Fraude" tendría 99.88% de Accuracy pero capturaría 0 fraudes.
 
 #### Matriz de Confusión:
-- **Verdaderos Negativos (TN):** 120,653
-- **Falsos Positivos (FP):** 45,630
-- **Falsos Negativos (FN):** 592
-- **Verdaderos Positivos (TP):** 1,441
+- **Verdaderos Negativos (TN):** 1,213,625
+- **Falsos Positivos (FP):** 424,015
+- **Falsos Negativos (FN):** 585
+- **Verdaderos Positivos (TP):** 1,448
 
 ### 4.2 Modelo Comparativo Académico: Regresión Lineal (OLS)
 
-- **Error Cuadrático Medio (MSE):** 0.0117
-- **Raíz del Error Cuadrático Medio (RMSE):** 0.1083
-- **Error Absoluto Medio (MAE):** 0.0207
-- **Coeficiente $R^2$:** 0.0177
-- **Predicciones Anómalas Fuera de $[0, 1]$:** **30,505 transacciones (18.12%)** recibieron valores menores a 0 (mínimo predicho: $-0.0178$).
+- **Error Cuadrático Medio (MSE):** 0.00124
+- **Raíz del Error Cuadrático Medio (RMSE):** 0.0352
+- **Predicciones Anómalas Fuera de $[0, 1]$:** **18.19% de las transacciones** recibieron valores menores a 0 (violación axiomática del rango de probabilidad).
 - **Conclusión Técnica:** La regresión lineal es formalmente inadecuada para clasificación binaria probabilística debido a la falta de acotamiento del hiperplano, heterocedasticidad intrínseca de los residuos y ausencia de probabilidades calibradas para el analista.
 
 ---

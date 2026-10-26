@@ -1,0 +1,23 @@
+{
+  "unidad": "Unidad 2 - Modelado Avanzado y Benchmark",
+  "dataset_fuente": "IBM TabFormer",
+  "modelo_ganador": "Hist_Gradient_Boosting",
+  "total_train": 252670,
+  "total_test": 1639673,
+  "fraudes_test": 2033,
+  "metricas_test": {
+    "accuracy": 0.8222743193307446,
+    "precision": 0.004177275484293239,
+    "recall": 0.5996064928676832,
+    "f1_score": 0.00829675004253871,
+    "pr_auc": 0.012228620645258533,
+    "roc_auc": 0.8354542243872756
+  },
+  "archivos_asociados": {
+    "preprocessor": "preprocessor_unidad2.joblib",
+    "modelo": "modelo_unidad2_seleccionado.joblib",
+    "benchmark": "benchmark_modelos.csv",
+    "metricas_test": "metricas_prueba_final.csv",
+    "importancia_variables": "importancia_variables.csv"
+  }
+}

@@ -1,5 +1,6 @@
 """
 Script para generar y ejecutar 03_preprocesamiento/limpieza.ipynb de forma reproducible.
+Corrige la auditoría de importes, incluye mcc_category y establece la partición temporal estricta con prevalencia natural en Test.
 """
 
 from pathlib import Path
@@ -20,14 +21,19 @@ cells.append(nbf.v4.new_markdown_cell("""# 03. Limpieza y Sanitización de Datos
 ---
 
 ### Objetivos del Notebook:
-1. Validar la ausencia de encabezados repetidos o anomalías estructurales en el CSV.
-2. Sanitizar la columna `Amount` eliminando el símbolo de moneda y convirtiéndola a numérico `Float64`.
-3. Validar y estructurar fechas y horas (`Year`, `Month`, `Day`, `Time`).
-4. Tratar y documentar los importes negativos (filtrar devoluciones de compra para aislar el riesgo de cargos no autorizados).
-5. Tratar valores ausentes en variables geográficas (`Zip` y `Merchant State`) asignando categorías semánticas claras (`ONLINE` / `UNKNOWN`).
-6. Justificar la exclusión metodológica de `Errors?` para evitar **fuga de datos (Target Leakage)**.
-7. Mapear y validar la variable objetivo `Is Fraud?` a formato binario numérico (`is_fraud`: 0 / 1).
-8. Generar y exportar el dataset limpio en formato **Parquet comprimido** en `data/processed/`, conservando intacta la fuente original.
+1. Validar la integridad de los encabezados del archivo crudo.
+2. Sanitizar la columna `Amount` eliminando el símbolo `$` y convirtiéndola a numérico `Float64`.
+3. **Auditoría Real de Importes y Etiquetas:** Analizar y exportar el cruce empírico de `Is Fraud?` frente a las 4 cohortes de importe (`Amount < 0`, `Amount == 0`, `Amount > 0` y Nulos) en `data/processed/auditoria_importes_y_etiquetas.csv`.
+4. Delimitar formalmente el alcance de los modelos supervisados a la **cohorte de compras con cargo positivo (`Amount > 0`)**.
+5. Imputar valores faltantes en variables geográficas (`Zip` y `Merchant State`) asignando categorías semánticas claras (`ONLINE` / `-1.0`).
+6. Enriquecer con macro-sectores de comercio `mcc_category` según estándar ISO 18245.
+7. Justificar la exclusión de `Errors?` para prevenir **fuga de datos (Target Leakage)**.
+8. Mapear y validar la variable objetivo `Is Fraud?` a formato binario numérico (`is_fraud`: 0 / 1).
+9. **Partición Temporal Estricta y Representativa:**
+   - Separación cronológica previa: Desarrollo (Ventana Activa 2017-11 a 2018-12) y Prueba (2019).
+   - Conservar la **prevalencia natural representativa** en el conjunto de prueba (Test 2019: 0.124%).
+   - Muestra reproducible para entrenamiento (Train: 100% fraudes 2017-18 + 250k legítimas con semilla 42).
+   - Exportar `data/processed/resumen_particiones.csv` y los Parquets procesados.
 """))
 
 # Celda 1: Setup y rutas
@@ -46,9 +52,13 @@ from notebooks._comun.config import (
     RAW_DATA_FILE,
     PROCESSED_DATA_DIR,
     CLEAN_DATA_FILE,
+    TRAIN_DATA_FILE,
+    TEST_DATA_FILE,
+    AUDIT_AMOUNTS_FILE,
+    PARTITIONS_SUMMARY_FILE,
     RANDOM_STATE,
 )
-from notebooks._comun.data_utils import scan_dataset, clean_amount_expr, categorize_mcc_expr, extract_temporal_features
+from notebooks._comun.data_utils import scan_dataset, clean_amount_expr, extract_temporal_features, categorize_mcc_expr
 print(f"Raíz del proyecto: {PROJECT_ROOT}")
 """))
 
@@ -60,7 +70,7 @@ lf = scan_dataset(RAW_DATA_FILE)
 print("Dataset crudo escaneado en modo Lazy.")
 """))
 
-# Celda 3: Verificación de encabezados y consistencia
+# Celda 3: Verificación de encabezados
 cells.append(nbf.v4.new_markdown_cell("""## 1. Verificación de Integridad de Encabezados
 Nos aseguramos de que no existan filas intermedias con nombres de encabezados repetidos.
 """))
@@ -75,95 +85,189 @@ print(f"Filas con encabezados repetidos: {header_corrupt}")
 assert header_corrupt == 0, "Error: Existen encabezados repetidos en el archivo."
 """))
 
-# Celda 4: Sanitización de Amount y tratamiento de importes negativos
-cells.append(nbf.v4.new_markdown_cell("""## 2. Sanitización de `Amount` y Tratamiento de Negativos
-Convertimos el importe de texto a `Float64` y filtramos las transacciones con importes menores o iguales a cero (reembolsos/ajustes), documentando la justificación de negocio.
+# Celda 4: Auditoría de importes y guardado de CSV
+cells.append(nbf.v4.new_markdown_cell("""## 2. Auditoría Real de Importes y Etiquetas
+Sanitizamos `Amount` y cruzamos empíricamente la variable objetivo `Is Fraud?` contra los 4 grupos de importes:
+1. `Amount < 0` (Reembolsos / devoluciones / contracargos)
+2. `Amount == 0` (Transacciones de validación de tarjeta / tarifa cero)
+3. `Amount > 0` (Compras con cargo positivo)
+4. `Nulos / No convertibles`
 """))
 
 cells.append(nbf.v4.new_code_cell("""amt_expr = clean_amount_expr("Amount")
 
-# Inspección de importes no positivos
-non_positive_count = (
-    lf.filter(amt_expr <= 0)
-    .select(pl.len())
+audit_df = (
+    lf.select([
+        amt_expr.alias("Amount_Num"),
+        pl.col("Is Fraud?").alias("is_fraud_raw")
+    ])
+    .with_columns([
+        pl.when(pl.col("Amount_Num").is_null()).then(pl.lit("Nulos / No convertibles"))
+        .when(pl.col("Amount_Num") < 0).then(pl.lit("Amount < 0"))
+        .when(pl.col("Amount_Num") == 0).then(pl.lit("Amount == 0"))
+        .otherwise(pl.lit("Amount > 0"))
+        .alias("grupo_importe"),
+        (pl.col("is_fraud_raw") == "Yes").cast(pl.Int32).alias("is_fraud")
+    ])
+    .group_by("grupo_importe")
+    .agg([
+        pl.len().alias("total_registros"),
+        pl.col("is_fraud").sum().alias("total_fraudes"),
+        (pl.len() - pl.col("is_fraud").sum()).alias("total_legitimas"),
+    ])
+    .with_columns([
+        (pl.col("total_fraudes") / pl.col("total_registros") * 100).round(4).alias("prevalencia_fraude_pct"),
+        (pl.col("total_registros") / 24386900 * 100).round(4).alias("pct_del_dataset")
+    ])
+    .sort("total_registros", descending=True)
     .collect()
-    .item()
 )
-print(f"Transacciones con importe <= $0 (devoluciones/ajustes): {non_positive_count:,}")
 
-# Aplicación de filtro: conservamos exclusivamente transacciones de cargo positivo (> 0)
-lf_clean = lf.with_columns(amt_expr.alias("Amount")).filter(pl.col("Amount") > 0)
+print("=== Tabla de Auditoría de Importes y Etiquetas ===")
+print(audit_df)
+
+audit_df.write_csv(AUDIT_AMOUNTS_FILE)
+print(f"Auditoría exportada exitosamente a: {AUDIT_AMOUNTS_FILE}")
 """))
 
-# Celda 5: Validación y estructuración temporal
-cells.append(nbf.v4.new_markdown_cell("""## 3. Validación y Extracción Temporal
-Transformamos `Time` y la fecha en variables enriquecidas: `hour`, `minute`, `day_of_week`, `is_weekend`, `is_night`.
+cells.append(nbf.v4.new_markdown_cell("""> **Definición de Alcance de Modelado y Reglas de Negocio:**
+> - El cruce revela que existen **1,125 fraudes en transacciones con `Amount < 0`** (prevalencia de 0.0904%) y **13 fraudes en `Amount == 0`** (prevalencia de 0.0643%).
+> - En la arquitectura operativa bancaria, los reembolsos y contracargos fraudulentos corresponden a tipologías de fraude pos-transaccional (e.g. *refund fraud*, lavado o errores de conciliación) que no siguen el patrón de autorización de compra en tiempo real.
+> - **Alcance del modelo supervisado:** Se delimita exclusivamente a las transacciones de **compra con cargo positivo (`Amount > 0`)**, que concentran el 96.18% de los fraudes del dataset (28,619 casos).
+> - **Manejo en Inferencia:** Las transacciones con `Amount <= 0` serán capturadas por una regla de excepción y catalogadas como `OUT_OF_COHORT_REVIEW` para auditoría operativa, sin ser forzadas por el modelo de compra.
 """))
 
-cells.append(nbf.v4.new_code_cell("""lf_clean = extract_temporal_features(lf_clean)
-print("Variables temporales extraídas exitosamente.")
+# Celda 5: Filtrado de cohorte positiva y extracción temporal
+cells.append(nbf.v4.new_markdown_cell("""## 3. Delimitación de Cohorte y Extracción de Variables Temporales
+Filtramos la cohorte de compras `Amount > 0` y estructuramos las variables horarias y de calendario.
 """))
 
-# Celda 6: Tratamiento de nulos en geografía y categorías
-cells.append(nbf.v4.new_markdown_cell("""## 4. Imputación de Valores Faltantes en Geografía
-Rellenamos los nulos de `Merchant State` y `Zip` que corresponden a transacciones en línea o comercios sin dirección postal.
+cells.append(nbf.v4.new_code_cell("""# Filtro de cohorte positiva
+lf_pos = lf.with_columns(amt_expr.alias("Amount")).filter(pl.col("Amount") > 0)
+
+# Extracción de variables temporales enriquecidas
+lf_pos = extract_temporal_features(lf_pos)
+print("Cohorte positiva delimitada y variables temporales extraídas.")
 """))
 
-cells.append(nbf.v4.new_code_cell("""lf_clean = lf_clean.with_columns([
-    pl.col("Merchant State").fill_null("ONLINE").alias("Merchant State"),
-    pl.col("Zip").fill_null(-1.0).alias("Zip"),
+# Celda 6: Imputación de nulos, MCC y prevención de fuga (Errors?)
+cells.append(nbf.v4.new_markdown_cell("""## 4. Imputación de Nulos, MCC y Prevención de Fuga de Información (`Errors?`)
+- Rellenamos `Merchant State` nulo con `"ONLINE"` y `Zip` con `-1.0`.
+- Categorizamos `MCC` en `mcc_category`.
+- Excluimos la columna `Errors?` para evitar **Target Leakage**.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""lf_clean = (
+    lf_pos.with_columns([
+        pl.col("Merchant State").fill_null("ONLINE").alias("Merchant State"),
+        pl.col("Zip").fill_null(-1.0).alias("Zip"),
+        (pl.col("Is Fraud?") == "Yes").cast(pl.Int32).alias("is_fraud"),
+        categorize_mcc_expr("MCC")
+    ])
+    .drop("Errors?")
+)
+print("Columna 'Errors?' excluida, nulos imputados y mcc_category añadida exitosamente.")
+"""))
+
+# Celda 7: Partición Temporal Estricta y Resumen de Particiones
+cells.append(nbf.v4.new_markdown_cell("""## 5. Partición Temporal Estricta y Muestreo Reproducible
+Para garantizar rigor metodológico:
+1. **Auditoría de Actividad:** En IBM TabFormer, los primeros 10 meses de 2017 presentan 0 fraudes en compras. La actividad sostenida de fraude se activa a partir de **noviembre de 2017** hasta diciembre de 2018 (abarcando el 100% de los 2,670 fraudes de desarrollo).
+2. **Ventana de Desarrollo (Train):** Noviembre 2017 a Diciembre 2018 (**100% de los 2,670 fraudes + 250,000 legítimas con semilla 42**, total 252,670 filas). Esto garantiza que cada partición temporal contenga ambas clases.
+3. **Test 2019 con Prevalencia Natural:** Población completa de 2019 (**1,639,673 transacciones, 2,033 fraudes, prevalencia real 0.124%**).
+"""))
+
+cells.append(nbf.v4.new_code_cell("""# 1. Separación cronológica
+lf_dev = lf_clean.filter(
+    (pl.col("Year") == 2018) | ((pl.col("Year") == 2017) & (pl.col("Month") >= 11))
+)
+lf_test = lf_clean.filter(pl.col("Year") == 2019)
+
+# 2. Recolección de Test Set completo (prevalencia natural 2019)
+test_df = lf_test.collect().sort(["Year", "Month", "Day", "Time"])
+n_test = test_df.shape[0]
+n_test_fraud = int(test_df["is_fraud"].sum())
+prev_test = round((n_test_fraud / n_test) * 100, 4)
+
+print(f"Test Set (2019): {n_test:,} transacciones | Fraudes: {n_test_fraud:,} | Prevalencia: {prev_test}%")
+
+# 3. Muestra de Entrenamiento (Train Split 2017-11 a 2018-12)
+frauds_dev = lf_dev.filter(pl.col("is_fraud") == 1).collect()
+legit_dev = lf_dev.filter(pl.col("is_fraud") == 0).collect().sample(n=250000, seed=RANDOM_STATE)
+
+train_df = pl.concat([frauds_dev, legit_dev]).sort(["Year", "Month", "Day", "Time"])
+n_train = train_df.shape[0]
+n_train_fraud = int(train_df["is_fraud"].sum())
+prev_train = round((n_train_fraud / n_train) * 100, 4)
+
+print(f"Train Set (2017-11 a 2018-12): {n_train:,} transacciones | Fraudes: {n_train_fraud:,} | Prevalencia: {prev_train}%")
+
+# 4. Generación de tabla resumen de particiones
+partitions_df = pl.DataFrame([
+    {
+        "particion": "Universo Crudo Total",
+        "periodo": "1991 - 2020",
+        "total_registros": 24386900,
+        "total_fraudes": 29757,
+        "prevalencia_fraude_pct": 0.1220,
+        "descripcion": "Dataset original completo de IBM TabFormer"
+    },
+    {
+        "particion": "Cohorte Positiva (Amount > 0)",
+        "periodo": "1991 - 2020",
+        "total_registros": 23122004,
+        "total_fraudes": 28619,
+        "prevalencia_fraude_pct": 0.1238,
+        "descripcion": "Ámbito de compras con cargo positivo (excluye devoluciones y ceros)"
+    },
+    {
+        "particion": "Desarrollo Universo (2017-11 a 2018-12)",
+        "periodo": "2017-11 - 2018-12",
+        "total_registros": 1912099,
+        "total_fraudes": 2670,
+        "prevalencia_fraude_pct": 0.1396,
+        "descripcion": "Ventana activa con fraude continuo en desarrollo histórico"
+    },
+    {
+        "particion": "Entrenamiento Modelo (Train Split)",
+        "periodo": "2017-11 - 2018-12",
+        "total_registros": n_train,
+        "total_fraudes": n_train_fraud,
+        "prevalencia_fraude_pct": prev_train,
+        "descripcion": f"Muestra estratificada: 100% fraudes 2017-18 + 250k legítimas (seed={RANDOM_STATE})"
+    },
+    {
+        "particion": "Prueba Final Independiente (Test 2019)",
+        "periodo": "2019",
+        "total_registros": n_test,
+        "total_fraudes": n_test_fraud,
+        "prevalencia_fraude_pct": prev_test,
+        "descripcion": "Población completa 2019 con prevalencia natural representativa"
+    }
 ])
+
+print("\\n=== Resumen de Particiones ===")
+print(partitions_df)
+partitions_df.write_csv(PARTITIONS_SUMMARY_FILE)
+print(f"Resumen de particiones guardado en: {PARTITIONS_SUMMARY_FILE}")
 """))
 
-# Celda 7: Prevención de Data Leakage (Exclusión de Errors?)
-cells.append(nbf.v4.new_markdown_cell("""## 5. Prevención de Fuga de Información (`Errors?`)
-`Errors?` registra mensajes posteriores a la autorización bancaria (`Bad PIN`, `Insufficient Balance`). Excluimos esta columna del conjunto de variables disponibles para predicción.
+# Celda 8: Exportación a Parquet
+cells.append(nbf.v4.new_markdown_cell("""## 6. Exportación de Particiones Limpias a Parquet
+Guardamos `train_split.parquet`, `test_split.parquet` y la muestra completa limpia consolidada.
 """))
 
-cells.append(nbf.v4.new_code_cell("""# Verificamos valores de Errors? antes de excluirla
-print("Distribución de los errores más frecuentes:")
-print(lf_clean.group_by("Errors?").len().sort("len", descending=True).limit(5).collect())
+cells.append(nbf.v4.new_code_cell("""# Guardar particiones en Parquet
+train_df.write_parquet(TRAIN_DATA_FILE, compression="snappy")
+test_df.write_parquet(TEST_DATA_FILE, compression="snappy")
 
-# Descartamos la columna para evitar fuga hacia el modelo
-lf_clean = lf_clean.drop("Errors?")
-print("\\nColumna 'Errors?' excluida exitosamente para evitar Data Leakage.")
-"""))
+# Guardar muestra consolidada representativa para exploraciones rápidas
+clean_sample = pl.concat([train_df, test_df.sample(n=100000, seed=RANDOM_STATE)]).sort(["Year", "Month", "Day", "Time"])
+clean_sample.write_parquet(CLEAN_DATA_FILE, compression="snappy")
 
-# Celda 8: Normalización y mapeo de la variable objetivo
-cells.append(nbf.v4.new_markdown_cell("""## 6. Mapeo Binario de la Variable Objetivo (`is_fraud`)
-Mapeamos `Is Fraud?` ("No" -> 0, "Yes" -> 1).
-"""))
-
-cells.append(nbf.v4.new_code_cell("""lf_clean = lf_clean.with_columns(
-    (pl.col("Is Fraud?") == "Yes").cast(pl.Int32).alias("is_fraud")
-)
-
-target_check = lf_clean.group_by("is_fraud").len().collect()
-print("Distribución de la etiqueta binaria 'is_fraud':")
-print(target_check)
-"""))
-
-# Celda 9: Generación del Parquet Limpio
-cells.append(nbf.v4.new_markdown_cell("""## 7. Muestreo Estratificado y Exportación a Parquet
-Para permitir entrenamientos rápidos, control de memoria y reproducibilidad en la laptop, seleccionamos una muestra amplia y representativa de los años recientes (2017–2019) preservando todos los casos de fraude de este periodo y guardamos en formato Parquet comprimido con Snappy.
-"""))
-
-cells.append(nbf.v4.new_code_cell("""# Filtramos el período moderno 2017-2019 para garantizar coherencia en el comportamiento del fraude
-modern_lf = lf_clean.filter(pl.col("Year").is_in([2017, 2018, 2019]))
-
-# Para optimizar memoria en laptop, tomamos una muestra estratificada reproducible:
-# 100% de los fraudes del período moderno + 500,000 transacciones legítimas del mismo período
-frauds_modern = modern_lf.filter(pl.col("is_fraud") == 1).collect()
-legit_modern = modern_lf.filter(pl.col("is_fraud") == 0).collect().sample(n=500000, seed=RANDOM_STATE)
-
-df_clean_sample = pl.concat([frauds_modern, legit_modern]).sort(["Year", "Month", "Day", "Time"])
-
-print(f"Dimensiones de la muestra limpia: {df_clean_sample.shape[0]:,} filas x {df_clean_sample.shape[1]} columnas")
-print(f"Fraudes en la muestra: {df_clean_sample['is_fraud'].sum():,} ({df_clean_sample['is_fraud'].mean()*100:.3f}%)")
-
-# Guardar en formato Parquet
-df_clean_sample.write_parquet(CLEAN_DATA_FILE, compression="snappy")
-print(f"Dataset limpio guardado exitosamente en: {CLEAN_DATA_FILE}")
+print(f"Train split guardado en: {TRAIN_DATA_FILE} ({train_df.shape[0]:,} filas)")
+print(f"Test split guardado en:  {TEST_DATA_FILE} ({test_df.shape[0]:,} filas)")
+print(f"Clean sample guardado en: {CLEAN_DATA_FILE} ({clean_sample.shape[0]:,} filas)")
 """))
 
 nb.cells = cells

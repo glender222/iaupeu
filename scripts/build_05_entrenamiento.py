@@ -58,7 +58,7 @@ from notebooks._comun.config import (
     LOGISTIC_REGRESSION_PARAMS,
     LINEAR_REGRESSION_PARAMS,
 )
-from notebooks._comun.data_utils import load_artifact, save_artifact
+from notebooks._comun.data_utils import load_artifact, save_artifact, categorize_mcc_expr
 print(f"Raíz del proyecto: {PROJECT_ROOT}")
 """))
 
@@ -77,8 +77,14 @@ print(f"Semilla de reproducibilidad fijada: {RANDOM_STATE}")
 train_df = pl.read_parquet(TRAIN_DATA_FILE)
 test_df = pl.read_parquet(TEST_DATA_FILE)
 
+# Verificación defensiva de mcc_category
+if "mcc_category" not in train_df.columns:
+    train_df = train_df.with_columns(categorize_mcc_expr("MCC"))
+if "mcc_category" not in test_df.columns:
+    test_df = test_df.with_columns(categorize_mcc_expr("MCC"))
+
 print(f"Train Set: {train_df.shape[0]:,} registros | Fraudes: {train_df['is_fraud'].sum():,} ({train_df['is_fraud'].mean()*100:.3f}%)")
-print(f"Test Set:  {test_df.shape[0]:,} registros | Fraudes: {test_df['is_fraud'].sum():,} ({test_df['is_fraud'].mean()*100:.3f}%)")
+print(f"Test Set:  {test_df.shape[0]:,} registros | Fraudes: {test_df['is_fraud'].sum():,} ({test_df['is_fraud'].mean()*100:.4f}% prevalencia natural)")
 """))
 
 # Celda 3: Carga del preprocesador y transformación de matrices
@@ -130,7 +136,7 @@ print(coef_df.head(5)[["Característica", "Coeficiente"]])
 """))
 
 # Celda 5: Entrenamiento de Regresión Lineal (Comparación Académica)
-cells.append(nbf.v4.new_markdown_cell("""## 3. Entrenamiento del Modelo Comparativo: Regresión Lineal
+cells.append(nbf.v4.new_markdown_cell(r"""## 3. Entrenamiento del Modelo Comparativo: Regresión Lineal
 Ajustamos una `LinearRegression` convencional por mínimos cuadrados ordinarios ($OLS$) sobre la variable objetivo binaria $\{0, 1\}$.
 Este modelo se entrena con fines didácticos para comparar empíricamente sus deficiencias en evaluación.
 """))
