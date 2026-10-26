@@ -1,0 +1,33 @@
+{
+  "dataset": "IBM TabFormer - Test Set 2019",
+  "total_test_samples": 168316,
+  "total_frauds": 2033,
+  "fraud_prevalence_pct": 1.2078471446564794,
+  "baseline_logistic_regression": {
+    "accuracy": 0.725385584258181,
+    "precision": 0.030613328801172696,
+    "recall": 0.7088047220855878,
+    "f1_score": 0.05869175627240143,
+    "confusion_matrix": {
+      "tn": 120653,
+      "fp": 45630,
+      "fn": 592,
+      "tp": 1441,
+      "total": 168316
+    },
+    "false_positive_rate": 0.2744116957235556,
+    "false_negative_rate": 0.2911952779144122,
+    "pr_auc": 0.04701181353560184,
+    "roc_auc": 0.7944509579300444
+  },
+  "comparative_linear_regression": {
+    "mse": 0.011720908592152275,
+    "rmse": 0.10826314512405538,
+    "mae": 0.02073485917642798,
+    "r2_score": 0.01773910980765525,
+    "pred_min": -0.017819404126747707,
+    "pred_max": 0.1626800767567725,
+    "predictions_outside_0_1_count": 30505,
+    "predictions_outside_0_1_pct": 18.123648375674325
+  }
+}

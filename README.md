@@ -1,77 +1,128 @@
-# Entorno de Trabajo de Data Science e Inteligencia Artificial (IA)
+# Sistema de IA para la Detección y Priorización de Fraude Financiero
 
-Bienvenido al entorno de desarrollo para el proyecto de análisis de fraude financiero y modelado de Machine Learning (`bank_fraud.csv`).
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
+[![Polars](https://img.shields.io/badge/Polars-2.1.0-blue.svg)](https://pola.rs)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-orange.svg)](https://scikit-learn.org)
+[![Status](https://img.shields.io/badge/Unidad_1-Completada_y_Validada-brightgreen.svg)]()
 
----
+Sistema de Inteligencia Artificial para la detección y priorización de transacciones con tarjeta de crédito potencialmente fraudulentas (incluyendo operaciones en línea y presenciales), asistiendo a un **analista humano** en la toma de decisiones mediante puntuaciones de riesgo (*Risk Score* de 0 a 100).
 
-## 🛠️ 1. Arquitectura del Entorno
-
-- **Versión de Python:** Python `3.12` gestionado con `uv` (alto rendimiento y reproducibilidad).
-- **Aceleración por Hardware:** **PyTorch 2.6+cu124** con soporte nativo para **CUDA 12.4** (NVIDIA GeForce RTX 3050 Laptop GPU).
-- **Kernel de Jupyter:** Registrado como `Python 3.12 (IA & Data - iaupeu)`.
-
----
-
-## 📦 2. Librerías Instaladas
-
-| Categoría | Librerías Principales | Propósito |
-|---|---|---|
-| **Manipulación & Alto Rendimiento** | `polars`, `pandas`, `pyarrow`, `numpy`, `scipy` | Procesamiento ultrarrápido de 1M+ filas en `bank_fraud.csv`. |
-| **Visualización** | `matplotlib`, `seaborn`, `plotly` | Gráficos estáticos e interactivos para análisis exploratorio. |
-| **Machine Learning & Modelado** | `scikit-learn`, `xgboost`, `lightgbm`, `catboost` | Algoritmos de clasificación supervisada de estado del arte. |
-| **Datos Desbalanceados** | `imbalanced-learn` (`imblearn`) | Técnicas SMOTE, ADASYN, submuestreo para fraude minoritario. |
-| **Explicabilidad & Métricas** | `shap` | Valores SHAP para interpretabilidad del modelo. |
-| **Deep Learning** | `torch`, `torchvision`, `torchaudio` | Redes neuronales aceleradas por GPU. |
-| **Entorno Interactivo** | `ipykernel`, `jupyterlab`, `tqdm`, `rich` | Notebooks, barras de progreso y consola enriquecida. |
-| **Calidad de Código** | `ruff` | Linter y formateador ultrarrápido integrado en VS Code. |
+Este repositorio contiene la entrega y validación completa de la **Unidad 1**, desarrollada utilizando el dataset **IBM TabFormer** como fuente principal de datos.
 
 ---
 
-## 🧩 3. Extensiones y Plugins de VS Code
+## 📁 Estructura del Repositorio
 
-Las siguientes extensiones clave han sido configuradas:
+La arquitectura sigue estrictamente la jerarquía requerida:
 
-1. **Jupyter** (`ms-toolsai.jupyter`):
-   - Ejecución interactiva de celdas `.ipynb`.
-   - Soporte para variables interactivas y depuración de celdas.
-
-2. **Microsoft Data Wrangler** (`ms-toolsai.datawrangler`):
-   - **Esencial para Data Science en VS Code:** Abre dataframes de Pandas/Polars en una interfaz visual interactiva con estadísticas automáticas, detección de outliers, correlaciones y generación de código Python en 1 clic.
-
-3. **Rainbow CSV** (`mechatroner.rainbow-csv`):
-   - Colorea cada columna de `bank_fraud.csv` con colores diferentes para inspeccionar el dataset al instante. Permite consultas SQL sobre archivos CSV con RBQL.
-
-4. **Ruff** (`charliermarsh.ruff`):
-   - Formateador automático al guardar archivos `.py`, ordenación de imports y detección de errores de sintaxis en milisegundos.
-
-5. **Python & Pylance** (`ms-python.python`, `ms-python.vscode-pylance`):
-   - Autocompletado inteligente, tipado estático y navegación de código.
-
-6. **Extensiones de IA recomendadas:**
-   - **Claude Code** (`anthropic.claude-code`) o **GitHub Copilot** (`github.copilot` / `github.copilot-chat`): Asistente de autocompletado y chat en línea.
-   - **Continue** (`Continue.continue`): Si deseas conectar modelos locales (Ollama/LM Studio) o APIs abiertas.
-
----
-
-## 🚀 4. Guía Rápida de Uso
-
-### Activar el Entorno en la Terminal
-```bash
-source .venv/bin/activate
+```text
+iaupeu/
+├── notebooks/
+│   ├── _comun/                         # Módulos reutilizables y configuración portable
+│   │   ├── config.py                   # Rutas relativas, esquema, columnas y constantes
+│   │   ├── data_utils.py               # Operaciones Lazy en Polars, métricas y serialización
+│   │   └── README.md                   # Documentación de las utilidades comunes
+│   └── UNIDAD 1/
+│       ├── 01_ingesta/
+│       │   └── ingesta.ipynb           # Verificación de archivos, esquemas y conteo Lazy
+│       ├── 02_exploracion/
+│       │   └── analisis_exploratorio.ipynb # EDA, desbalance (0.12%), importes y temporalidad
+│       ├── 03_preprocesamiento/
+│       │   ├── limpieza.ipynb          # Sanitización de importes, fechas, nulos y exclusión de fuga
+│       │   └── transformacion.ipynb    # Features temporales, partición temporal y ColumnTransformer
+│       ├── 04_modelado/
+│       │   ├── entrenamiento.ipynb     # Regresión Logística baseline y Regresión Lineal comparativa
+│       │   └── evaluacion.ipynb        # Métricas de desbalance (PR-AUC, Recall), confusión y curvas
+│       └── 05_inferencia/
+│           └── predicciones.ipynb      # Scoring desacoplado sin columna 'Is Fraud?'
+├── artifacts/                          # Artefactos y modelos serializados
+│   ├── preprocessor.joblib             # Pipeline de transformación ajustado en Train (2017-18)
+│   ├── baseline_logistic_regression.joblib # Modelo baseline de clasificación supervisada
+│   ├── linear_regression_comparison.joblib # Modelo comparativo académico OLS
+│   └── evaluation_metrics.json         # Métricas cuantitativas en test temporal (2019)
+├── data/
+│   ├── DATA IBM/                       # Dataset fuente IBM TabFormer
+│   │   └── card_transaction.v1.csv     # 24,386,900 registros (2.19 GB)
+│   ├── processed/                      # Datos limpios y particiones intermedias
+│   │   ├── ingesta_resumen.json        # Resumen reproducible de ingesta
+│   │   ├── clean_transactions.parquet  # Transacciones limpias en Parquet
+│   │   ├── train_split.parquet         # Partición de entrenamiento (2017-2018)
+│   │   ├── test_split.parquet          # Partición de prueba independiente (2019)
+│   │   └── sample_inference.csv        # Lote de inferencia sin etiqueta de fraude
+│   └── predictions/                    # Salidas del pipeline de inferencia
+│       └── inference_results.csv       # Transacciones puntuadas con Risk Score y prioridad
+├── scripts/                            # Scripts de automatización y verificación
+│   └── verify_all.py                   # Ejecución secuencial en kernels limpios y validación
+├── informe_validacion_unidad1.md       # Informe técnico detallado de resultados y métricas
+├── requirements.txt                    # Dependencias de Python
+└── README.md                           # Guía técnica del proyecto
 ```
 
-### Probar y Verificar el Entorno
-Ejecuta el script de diagnóstico que valida librerías, GPU CUDA y el dataset `bank_fraud.csv`:
+---
+
+## 📊 Dataset Principal: IBM TabFormer
+
+- **Ubicación:** `data/DATA IBM/card_transaction.v1.csv` (archivo unificado de 2.19 GB).
+- **Registros totales:** **24,386,900 transacciones**.
+- **Distribución de clases:**
+  - Legítimas (`No`): 24,357,143 (99.878%)
+  - Fraude (`Yes`): 29,757 (0.122%)
+- **Tratamiento de Memoria:** El procesamiento se realiza mediante operaciones **Lazy y Streaming de Polars** (`pl.scan_csv()`), evitando cargar los 24 millones de registros a memoria RAM y permitiendo su ejecución fluida en laptops con recursos limitados.
+
+---
+
+## 🛠️ Instalación y Configuración del Entorno
+
+### 1. Requisitos Previos
+- Python 3.12 (recomendado en entorno virtual `.venv`).
+
+### 2. Creación del Entorno Virtual e Instalación de Dependencias
 ```bash
-python verify_env.py
+# Crear entorno virtual
+python3.12 -m venv .venv
+
+# Activar entorno
+source .venv/bin/activate  # En Linux/macOS
+# .venv\Scripts\activate   # En Windows
+
+# Instalar dependencias
+pip install -r requirements.txt
 ```
 
-### Trabajar con Notebooks en VS Code
-1. Abre o crea cualquier archivo `.ipynb` (ej. `01_exploracion_fraude.ipynb`).
-2. En la esquina superior derecha del notebook, haz clic en **Select Kernel** -> **Python Environments...**
-3. Elige: **`Python 3.12 (IA & Data - iaupeu)`** (o `.venv/bin/python`).
-4. ¡Listo! Todas las celdas se ejecutarán utilizando la GPU y las librerías instaladas.
+---
 
-### Uso de Microsoft Data Wrangler
-- En cualquier script o celda de Jupyter donde tengas un DataFrame (`df`):
-  En la pestaña **Jupyter: Variables**, haz clic en el icono de Data Wrangler junto al DataFrame para abrir el visor interactivo de datos.
+## 🚀 Ejecución del Flujo de Trabajo
+
+### Opción A: Ejecución Interactiva en Jupyter / VS Code
+Abrir y ejecutar los notebooks en el siguiente orden secuencial utilizando el kernel de `.venv`:
+
+1. `notebooks/UNIDAD 1/01_ingesta/ingesta.ipynb`
+2. `notebooks/UNIDAD 1/02_exploracion/analisis_exploratorio.ipynb`
+3. `notebooks/UNIDAD 1/03_preprocesamiento/limpieza.ipynb`
+4. `notebooks/UNIDAD 1/03_preprocesamiento/transformacion.ipynb`
+5. `notebooks/UNIDAD 1/04_modelado/entrenamiento.ipynb`
+6. `notebooks/UNIDAD 1/04_modelado/evaluacion.ipynb`
+7. `notebooks/UNIDAD 1/05_inferencia/predicciones.ipynb`
+
+### Opción B: Validación Automatizada en Kernel Limpio
+Para ejecutar todos los notebooks en serie asegurando kernels limpios, sin variables heredadas y validando los artefactos:
+```bash
+python scripts/verify_all.py
+```
+
+---
+
+## 📈 Resultados Clave del Baseline (Unidad 1)
+
+Evaluación sobre el conjunto de prueba independiente temporal (**Año 2019**, 168,316 transacciones, 2,033 fraudes reales):
+
+| Modelo | Recall (Fraude) | ROC-AUC | Precision | F1-Score | Accuracy |
+|---|---|---|---|---|---|
+| **Regresión Logística (Baseline)** | **70.88%** | **0.7945** | 3.06% | 0.0587 | 72.54% |
+| **Regresión Lineal (Comparativa OLS)** | N/A (18.12% predicciones $< 0$) | N/A | N/A | N/A | $R^2 = 0.0177$ |
+
+> [!NOTE]
+> **Paradoja de la Exactitud (Accuracy Paradox):**  
+> Un modelo ingenuo que prediga siempre "No Fraude" alcanzaría un 98.79% de Accuracy pero capturaría 0 fraudes. La Regresión Logística con `class_weight='balanced'` prioriza interceptar la mayor cantidad de fraudes (**Recall de 70.88%**, detectando 1,441 casos), asignando un *Risk Score* continuo para que el analista humano priorice la cola de alertas críticas.
+
+Para un análisis técnico detallado, consultar [informe_validacion_unidad1.md](informe_validacion_unidad1.md).

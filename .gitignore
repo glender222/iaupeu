@@ -51,6 +51,7 @@ data/*
 bank_fraud.csv
 *.pkl
 *.joblib
+!artifacts/*.joblib
 *.onnx
 *.pt
 *.pth
