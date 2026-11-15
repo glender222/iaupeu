@@ -1,0 +1,154 @@
+{
+  "semilla": 42,
+  "columnas_transformadas": 26,
+  "nombres_columnas": [
+    "num__amount_log",
+    "num__hour_sin",
+    "num__hour_cos",
+    "num__minute",
+    "num__day_of_week",
+    "num__is_weekend",
+    "num__is_night",
+    "cat__Use Chip_Chip Transaction",
+    "cat__Use Chip_Online Transaction",
+    "cat__Use Chip_Swipe Transaction",
+    "cat__mcc_category_Airlines",
+    "cat__mcc_category_Apparel_Clothing",
+    "cat__mcc_category_Automotive_Fuel",
+    "cat__mcc_category_Car_Rental",
+    "cat__mcc_category_Entertainment_Recreation",
+    "cat__mcc_category_Financial_Services",
+    "cat__mcc_category_Lodging_Hotels",
+    "cat__mcc_category_Misc_Retail",
+    "cat__mcc_category_Other",
+    "cat__mcc_category_Professional_Health",
+    "cat__mcc_category_Restaurants_Dining",
+    "cat__mcc_category_Supermarkets_Groceries",
+    "cat__mcc_category_Transportation",
+    "cat__mcc_category_Utilities_Telecom",
+    "cat__is_online_IN_PERSON",
+    "cat__is_online_ONLINE"
+  ],
+  "versiones": {
+    "scikit_learn": "1.8.0",
+    "tensorflow": "2.21.0"
+  },
+  "periodos": {
+    "entrenamiento": "2017-11 a 2018-10",
+    "validacion": "2018-11 a 2018-12",
+    "prueba": "2019"
+  },
+  "entrenamiento": {
+    "total": 252157,
+    "fraudes": 2157,
+    "prevalencia": 0.008554194410625127,
+    "total_antes_de_submuestreo": 1637935
+  },
+  "validacion": {
+    "total": 274164,
+    "fraudes": 513,
+    "prevalencia": 0.001871142819626209
+  },
+  "prueba": {
+    "total": 1639673,
+    "fraudes": 2033,
+    "prevalencia": 0.0012398813665895577
+  },
+  "objetivo_tasa_alertas_validacion": 0.05,
+  "modelos": {
+    "HistGradientBoosting": {
+      "iteraciones": 100,
+      "umbral_operativo": 0.7904549970717015,
+      "validacion_average_precision": 0.02591218700291015,
+      "validacion_alertas": {
+        "alertas": 13710,
+        "tasa_alertas": 0.0500065654134022,
+        "precision": 0.01487964989059081,
+        "recall": 0.39766081871345027,
+        "f1": 0.028685931238135415,
+        "confusion": {
+          "tn": 260145,
+          "fp": 13506,
+          "fn": 309,
+          "tp": 204
+        }
+      },
+      "test_average_precision": 0.012288539428493747,
+      "test_roc_auc": 0.8333054117334852,
+      "test_operativo": {
+        "alertas": 81673,
+        "tasa_alertas": 0.049810541492114585,
+        "precision": 0.007297393263379574,
+        "recall": 0.29316281357599605,
+        "f1": 0.014240317301029795,
+        "confusion": {
+          "tn": 1556563,
+          "fp": 81077,
+          "fn": 1437,
+          "tp": 596
+        }
+      },
+      "test_umbral_05": {
+        "alertas": 260203,
+        "tasa_alertas": 0.15869200749173767,
+        "precision": 0.004308174771236304,
+        "recall": 0.5514018691588785,
+        "f1": 0.008549550786314617,
+        "confusion": {
+          "tn": 1378558,
+          "fp": 259082,
+          "fn": 912,
+          "tp": 1121
+        }
+      }
+    },
+    "MLP": {
+      "epocas_ejecutadas": 11,
+      "mejor_epoca": 1,
+      "parametros": 4097,
+      "umbral_operativo": 0.8379837274551392,
+      "validacion_average_precision": 0.012480530718986358,
+      "validacion_alertas": {
+        "alertas": 13709,
+        "tasa_alertas": 0.050002917961512086,
+        "precision": 0.012546502297760595,
+        "recall": 0.33528265107212474,
+        "f1": 0.024187877935592742,
+        "confusion": {
+          "tn": 260114,
+          "fp": 13537,
+          "fn": 341,
+          "tp": 172
+        }
+      },
+      "test_average_precision": 0.009925279141086117,
+      "test_roc_auc": 0.8402313458032111,
+      "test_operativo": {
+        "alertas": 81855,
+        "tasa_alertas": 0.04992153923373746,
+        "precision": 0.008771608331806242,
+        "recall": 0.35317265125430397,
+        "f1": 0.017118062178142286,
+        "confusion": {
+          "tn": 1556503,
+          "fp": 81137,
+          "fn": 1315,
+          "tp": 718
+        }
+      },
+      "test_umbral_05": {
+        "alertas": 432686,
+        "tasa_alertas": 0.2638855430320558,
+        "precision": 0.003566096430205738,
+        "recall": 0.7589768814559764,
+        "f1": 0.0070988385600813395,
+        "confusion": {
+          "tn": 1206497,
+          "fp": 431143,
+          "fn": 490,
+          "tp": 1543
+        }
+      }
+    }
+  }
+}

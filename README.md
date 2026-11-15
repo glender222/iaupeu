@@ -12,6 +12,10 @@ Desarrollado sobre el dataset masivo **IBM TabFormer** (24.38 millones de transa
 
 ---
 
+## Unidad 3
+
+[Prototipo de fraude con MLP e HistGradientBoosting](unidad3/README.md). Incluye demo local, notebook, modelos entrenados y evaluación sobre compras de 2019.
+
 ## 📁 Estructura del Repositorio
 
 La arquitectura sigue estrictamente la jerarquía modular requerida:
