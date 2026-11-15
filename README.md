@@ -19,6 +19,16 @@ Abre [http://127.0.0.1:7860](http://127.0.0.1:7860). Elige **Ingreso manual** o 
 - [Guía de la Unidad 3](unidad3/README.md) con instrucciones de inferencia, entrenamiento y evaluación.
 - [Notebook de la Unidad 3](unidad3/prototipo_fraude.ipynb) con las arquitecturas y resultados.
 
+## Demo web en el navegador
+
+El código de la versión web está en [`unidad3/web/`](unidad3/web/), con HTML, CSS y JavaScript. Esta versión ejecuta los modelos en el navegador y ya incluye los artefactos que necesita para evaluar transacciones.
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1 --directory unidad3/web
+```
+
+Abre [http://127.0.0.1:8000](http://127.0.0.1:8000). Las instrucciones para actualizar los modelos están en la [guía de la Unidad 3](unidad3/README.md#demo-web-en-el-navegador).
+
 ## Estructura del repositorio
 
 ```text
@@ -35,6 +45,7 @@ iaupeu/
 │   ├── entrenar.py                   # Entrenamiento y evaluación temporal
 │   ├── artefactos/                   # Modelos, preprocesador y métricas de la Unidad 3
 │   ├── ejemplos/                     # CSV de prueba
+│   ├── web/                          # Interfaz web, inferencia en el navegador y exportador
 │   ├── prototipo_fraude.ipynb         # Notebook con ejemplos de inferencia
 │   ├── requirements.txt              # Dependencias del prototipo
 │   └── README.md                     # Instrucciones de la Unidad 3

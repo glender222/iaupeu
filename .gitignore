@@ -59,5 +59,6 @@ bank_fraud.csv
 # Environment variables
 .env
 
-# Archivo sintético incluido para probar la demo de Unidad 3
+# CSV incluidos para probar las demos de Unidad 3
 !unidad3/ejemplos/transacciones_prueba.csv
+!unidad3/web/plantilla_transacciones.csv

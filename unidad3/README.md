@@ -25,6 +25,14 @@ El CSV acepta los encabezados `fecha,hora,monto,modalidad,estado,mcc` o los orig
 
 El notebook `unidad3/prototipo_fraude.ipynb` contiene la arquitectura de ambos modelos, celdas de inferencia, ejemplos ejecutados y un formulario ipywidgets. Para abrirlo en el navegador, instala JupyterLab en el mismo entorno con `python -m pip install jupyterlab` y ejecuta `jupyter lab unidad3/prototipo_fraude.ipynb`.
 
+## Demo web en el navegador
+
+La carpeta [`web/`](web/) contiene la interfaz de la versión publicada en ChatGPT Sites. Ejecuta MLP e HistGradientBoosting en JavaScript con los pesos, los árboles, el preprocesador y los umbrales de [`modelos.json`](web/modelos.json). El navegador procesa tanto el formulario manual como el CSV.
+
+Para abrirla desde la raíz del repositorio, ejecuta `python -m http.server 8000 --bind 127.0.0.1 --directory unidad3/web` y entra a [http://127.0.0.1:8000](http://127.0.0.1:8000). Puedes usar la [plantilla de la interfaz](web/plantilla_transacciones.csv) o el [CSV de prueba](ejemplos/transacciones_prueba.csv).
+
+Si vuelves a entrenar los modelos, activa el entorno Python de la Unidad 3 y ejecuta `python unidad3/web/exportar_modelos.py` para actualizar el JSON del navegador. Puedes pasar la ruta de otra carpeta de artefactos como argumento.
+
 ## Entrenamiento y evaluación
 
 ```bash
