@@ -1,0 +1,6 @@
+fecha,hora,monto,modalidad,estado,mcc
+2019-06-17,12:30,850.00,Chip Transaction,CA,5411
+2019-06-15,02:15,850.00,Online Transaction,ONLINE,5812
+2019-06-17,14:30,35.50,Chip Transaction,CA,5411
+2019-07-24,08:23,58.75,Swipe Transaction,NY,5812
+2019-06-17,14:30,-35.50,Chip Transaction,CA,5411

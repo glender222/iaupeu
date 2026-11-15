@@ -15,10 +15,13 @@ python -m unidad3.app
 
 Abre [http://127.0.0.1:7860](http://127.0.0.1:7860). Los modelos, el preprocesador y los umbrales ya están incluidos en `unidad3/artefactos/`.
 
-1. Carga **Compra prioritaria** y evalúa con **MLP de la clase**.
+1. En **Ingreso manual**, escribe los datos de una compra o abre **Usar un ejemplo** y carga **Compra prioritaria**. Evalúa con **MLP de la clase**.
 2. Conserva la transacción, cambia a **HistGradientBoosting del equipo** y vuelve a evaluar. Compara cada puntuación con su propio umbral.
 3. Carga **Importe negativo** y comprueba que la operación se deriva a revisión especializada.
-4. Abre **Resultados de la evaluación de 2019** para comparar los modelos.
+4. En **Cargar CSV**, selecciona [transacciones_prueba.csv](ejemplos/transacciones_prueba.csv), elige un modelo y pulsa **Evaluar archivo**. Descarga los resultados completos desde la misma pestaña.
+5. Abre **Resultados de la evaluación de 2019** para comparar los modelos.
+
+El CSV acepta los encabezados `fecha,hora,monto,modalidad,estado,mcc` o los originales de IBM TabFormer. Usa UTF-8, fechas `AAAA-MM-DD`, hora local `HH:MM` e importes en USD. Puedes separar columnas con comas o punto y coma y analizar hasta 10 000 registros y 5 MB por archivo. La demo reporta los errores por registro y conserva el orden de entrada.
 
 El notebook `unidad3/prototipo_fraude.ipynb` contiene la arquitectura de ambos modelos, celdas de inferencia, ejemplos ejecutados y un formulario ipywidgets. Para abrirlo en el navegador, instala JupyterLab en el mismo entorno con `python -m pip install jupyterlab` y ejecuta `jupyter lab unidad3/prototipo_fraude.ipynb`.
 

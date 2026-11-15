@@ -1,10 +1,14 @@
 """Demo web local para evaluar transacciones con los dos modelos."""
 
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 import gradio as gr
 
 from unidad3.datos import MODALIDADES
+from unidad3.lotes import COLUMNAS_SALIDA, evaluar_csv, exportar_csv
 from unidad3.modelos import HGB, MLP, Prototipo
 
 EJEMPLOS = [
@@ -19,6 +23,59 @@ MODALIDAD_VISIBLE = {
     "Online Transaction": "Compra en línea",
 }
 NOMBRES = [(f"{MLP} de la clase", MLP), (f"{HGB} del equipo", HGB)]
+CSV_PRUEBA = Path(__file__).parent / "ejemplos" / "transacciones_prueba.csv"
+FILAS_VISTA_PREVIA = 20
+
+
+def construir_carga_csv(prototipo):
+    exportaciones = TemporaryDirectory(prefix="fraude-unidad3-")
+
+    def evaluar_lote(modelo, archivo):
+        if not archivo:
+            raise gr.Error("Selecciona un archivo CSV.")
+        try:
+            filas = evaluar_csv(Path(archivo), modelo, prototipo)
+        except (OSError, ValueError) as error:
+            raise gr.Error(str(error)) from error
+
+        destino = Path(exportaciones.name) / uuid4().hex / "resultados_transacciones.csv"
+        destino.parent.mkdir()
+        exportar_csv(filas, destino)
+
+        prioritarios = sum(fila["prioridad"] == "Revisión prioritaria" for fila in filas)
+        habituales = sum(fila["prioridad"] == "Seguimiento habitual" for fila in filas)
+        derivados = sum(fila["prioridad"] == "Fuera del alcance" for fila in filas)
+        errores = sum("error" in fila for fila in filas)
+        resumen = (
+            f"**{modelo}** · Total {len(filas)} · Prioritarios {prioritarios} · "
+            f"Habituales {habituales} · Fuera del alcance {derivados} · Errores {errores}"
+        )
+        vista_previa = [
+            [fila.get(columna) for columna in COLUMNAS_SALIDA]
+            for fila in filas[:FILAS_VISTA_PREVIA]
+        ]
+        return resumen, vista_previa, str(destino)
+
+    gr.Markdown(
+        "Usa el CSV de prueba o un extracto con los encabezados originales de IBM TabFormer. "
+        "El límite es de 10 000 transacciones y 5 MB por archivo."
+    )
+    with gr.Row():
+        archivo = gr.File(label="Archivo CSV", file_types=[".csv"], type="filepath")
+        gr.File(value=str(CSV_PRUEBA), label="CSV de prueba", interactive=False)
+    modelo = gr.Radio(NOMBRES, value=HGB, label="Modelo")
+    boton = gr.Button("Evaluar archivo", variant="primary")
+    resumen = gr.Markdown()
+    resultados = gr.Dataframe(
+        headers=[
+            "Registro", "Modelo", "Fecha", "Importe (USD)", "Puntuación / 100",
+            "Umbral / 100", "Prioridad", "Acción", "Error",
+        ],
+        label="Primeras 20 transacciones",
+        interactive=False,
+    )
+    descarga = gr.File(label="Descargar resultados completos", interactive=False)
+    boton.click(evaluar_lote, [modelo, archivo], [resumen, resultados, descarga], api_name="evaluar_csv")
 
 
 def construir_interfaz(prototipo):
@@ -40,41 +97,45 @@ def construir_interfaz(prototipo):
     with gr.Blocks(title="Detección de fraude con tarjeta", analytics_enabled=False) as interfaz:
         gr.Markdown(
             "# Detección de fraude con tarjeta\n"
-            "Evalúa una compra de TabFormer con la red neuronal de la clase o con el modelo del equipo."
+            "Evalúa una transacción o un archivo CSV con la MLP de la clase o con HistGradientBoosting."
         )
-        with gr.Row(equal_height=False):
-            with gr.Column():
-                modelo = gr.Radio(NOMBRES, value=MLP, label="Modelo")
-                with gr.Row():
-                    fecha = gr.Textbox(label="Fecha", value=EJEMPLOS[0][0], placeholder="AAAA-MM-DD")
-                    hora = gr.Textbox(label="Hora local", value=EJEMPLOS[0][1], placeholder="HH:MM")
-                with gr.Row():
-                    importe = gr.Number(label="Importe (USD)", value=EJEMPLOS[0][2])
-                    mcc = gr.Number(label="Código de comercio (MCC)", value=EJEMPLOS[0][5])
-                with gr.Row():
-                    modalidad = gr.Dropdown(
-                        [(MODALIDAD_VISIBLE[m], m) for m in MODALIDADES],
-                        label="Modalidad de pago", value=EJEMPLOS[0][3],
+        with gr.Tab("Ingreso manual"):
+            with gr.Row(equal_height=False):
+                with gr.Column():
+                    modelo = gr.Radio(NOMBRES, value=MLP, label="Modelo")
+                    with gr.Row():
+                        fecha = gr.Textbox(label="Fecha", placeholder="AAAA-MM-DD")
+                        hora = gr.Textbox(label="Hora local", placeholder="HH:MM")
+                    with gr.Row():
+                        importe = gr.Number(label="Importe (USD)")
+                        mcc = gr.Number(label="Código de comercio (MCC)")
+                    with gr.Row():
+                        modalidad = gr.Dropdown(
+                            [(MODALIDAD_VISIBLE[m], m) for m in MODALIDADES],
+                            label="Modalidad de pago",
+                        )
+                        estado = gr.Textbox(
+                            label="Estado del comercio (opcional)",
+                            placeholder="CA, NY, ONLINE…",
+                        )
+                    boton = gr.Button("Evaluar transacción", variant="primary")
+                with gr.Column():
+                    prioridad = gr.Textbox(label="Prioridad", interactive=False)
+                    score = gr.Textbox(label="Puntuación de riesgo", interactive=False)
+                    accion = gr.Textbox(label="Acción sugerida al analista", interactive=False)
+                    regla = gr.Markdown()
+                    gr.Markdown(
+                        "La puntuación ordena casos para revisión humana y carece de calibración probabilística."
                     )
-                    estado = gr.Textbox(
-                        label="Estado del comercio", value=EJEMPLOS[0][4],
-                        placeholder="CA, NY, ONLINE…",
-                    )
-                boton = gr.Button("Evaluar transacción", variant="primary")
-            with gr.Column():
-                prioridad = gr.Textbox(label="Prioridad", interactive=False)
-                score = gr.Textbox(label="Puntuación de riesgo", interactive=False)
-                accion = gr.Textbox(label="Acción sugerida al analista", interactive=False)
-                regla = gr.Markdown()
-                gr.Markdown(
-                    "La puntuación ordena casos para revisión humana y carece de calibración probabilística."
+            campos = [fecha, hora, importe, modalidad, estado, mcc]
+            boton.click(evaluar, [modelo, *campos], [prioridad, score, accion, regla], api_name="evaluar")
+            with gr.Accordion("Usar un ejemplo", open=False):
+                gr.Examples(
+                    examples=EJEMPLOS, inputs=campos, label="Casos de demostración",
+                    example_labels=["Compra prioritaria", "Compra en línea", "Compra presencial", "Importe negativo"],
                 )
-        campos = [fecha, hora, importe, modalidad, estado, mcc]
-        boton.click(evaluar, [modelo, *campos], [prioridad, score, accion, regla], api_name="evaluar")
-        gr.Examples(
-            examples=EJEMPLOS, inputs=campos, label="Casos de demostración",
-            example_labels=["Compra prioritaria", "Compra en línea", "Compra presencial", "Importe negativo"],
-        )
+        with gr.Tab("Cargar CSV"):
+            construir_carga_csv(prototipo)
         with gr.Accordion("Resultados de la evaluación de 2019", open=False):
             metricas = prototipo.metricas
             gr.Markdown(

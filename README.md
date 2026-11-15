@@ -1,84 +1,53 @@
-# Sistema de IA para la Detección y Priorización de Fraude Financiero
+# Detección y priorización de fraude financiero
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
-[![Polars](https://img.shields.io/badge/Polars-2.1.0-blue.svg)](https://pola.rs)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-orange.svg)](https://scikit-learn.org)
-[![Unidad 1](https://img.shields.io/badge/Unidad_1-Completada_y_Auditada-brightgreen.svg)]()
-[![Unidad 2](https://img.shields.io/badge/Unidad_2-Completada_y_Validada-brightgreen.svg)]()
+Proyecto de Inteligencia Artificial de la UPeU. Usa transacciones de IBM TabFormer para asignar una puntuación de riesgo y ayudar a un analista a priorizar la revisión de compras con tarjeta.
 
-Sistema integral de Inteligencia Artificial para la detección, clasificación y priorización de transacciones con tarjeta de crédito potencialmente fraudulentas (incluyendo operaciones en línea y presenciales), asistiendo a un **analista humano AML/Fraude** en la toma de decisiones mediante puntuaciones continuas de riesgo (*Risk Score* de 0 a 100) y segmentación conductual de clientes.
+## Ejecutar la demo local
 
-Desarrollado sobre el dataset masivo **IBM TabFormer** (24.38 millones de transacciones) bajo una estricta política de **cero fuga de datos (*Zero Data Leakage*)**, partición cronológica temporal y procesamiento eficiente en streaming con **Polars**.
+Desde la raíz del repositorio, con Python 3.12:
 
----
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r unidad3/requirements.txt
+python -m unidad3.app
+```
 
-## Unidad 3
+Abre [http://127.0.0.1:7860](http://127.0.0.1:7860). Elige **Ingreso manual** o **Cargar CSV** y compara la MLP de la clase con HistGradientBoosting, el modelo del equipo. Los modelos entrenados y el preprocesador vienen incluidos.
 
-[Prototipo de fraude con MLP e HistGradientBoosting](unidad3/README.md). Incluye demo local, notebook, modelos entrenados y evaluación sobre compras de 2019.
+- [CSV de prueba](unidad3/ejemplos/transacciones_prueba.csv) con cinco transacciones ficticias.
+- [Guía de la Unidad 3](unidad3/README.md) con instrucciones de inferencia, entrenamiento y evaluación.
+- [Notebook de la Unidad 3](unidad3/prototipo_fraude.ipynb) con las arquitecturas y resultados.
 
-## 📁 Estructura del Repositorio
-
-La arquitectura sigue estrictamente la jerarquía modular requerida:
+## Estructura del repositorio
 
 ```text
 iaupeu/
+├── README.md                         # Guía principal y arranque de la demo
+├── analisis.md                       # Análisis del problema y del dataset
+├── informe_validacion_unidad1.md     # Informe de validación de la Unidad 1
+├── unidad3/                          # Módulo del prototipo final
+│   ├── __init__.py                   # Paquete Python de la Unidad 3
+│   ├── app.py                        # Interfaz Gradio y punto de entrada
+│   ├── lotes.py                      # Lectura y exportación CSV
+│   ├── datos.py                      # Validación y preparación de transacciones
+│   ├── modelos.py                    # Arquitecturas, inferencia y umbrales
+│   ├── entrenar.py                   # Entrenamiento y evaluación temporal
+│   ├── artefactos/                   # Modelos, preprocesador y métricas de la Unidad 3
+│   ├── ejemplos/                     # CSV de prueba
+│   ├── prototipo_fraude.ipynb         # Notebook con ejemplos de inferencia
+│   ├── requirements.txt              # Dependencias del prototipo
+│   └── README.md                     # Instrucciones de la Unidad 3
 ├── notebooks/
-│   ├── _comun/                                 # Módulos compartidos y configuración portable
-│   │   ├── config.py                           # Rutas, listas de características, parámetros y constantes
-│   │   ├── data_utils.py                       # Operaciones Lazy/Streaming, preprocesamiento y métricas
-│   │   └── README.md                           # Documentación técnica del módulo común
-│   ├── UNIDAD 1/                               # Fase 1: Ingesta, Auditoría y Modelos Baseline
-│   │   ├── 01_ingesta/ingesta.ipynb            # Ingesta Lazy, esquema y conteo de 24.38M registros
-│   │   ├── 02_exploracion/analisis_exploratorio.ipynb # EDA, auditoría de importes y temporalidad
-│   │   ├── 03_preprocesamiento/limpieza.ipynb  # Limpieza de nulos, control de fugas y particiones
-│   │   ├── 03_preprocesamiento/transformacion.ipynb # Pipeline ColumnTransformer y muestra inferencia
-│   │   ├── 04_modelado/entrenamiento.ipynb     # Regresión Logística y Regresión Lineal OLS
-│   │   ├── 04_modelado/evaluacion.ipynb        # Evaluación en Test 2019 y análisis probabilístico
-│   │   ├── 05_inferencia/predicciones.ipynb    # Scoring desacoplado y clasificación de prioridad
-│   │   └── README.md                           # Informe técnico completo de la Unidad 1
-│   └── UNIDAD 2/                               # Fase 2: Modelado Avanzado, Validación Temporal y Priorización
-│       ├── 01_preparacion/preparacion_datos_unidad2.ipynb # Feature engineering no lineal y cíclico
-│       ├── 02_modelado/comparacion_modelos_unidad2.ipynb  # Benchmark 7 modelos (5-Fold CV) y Test 2019
-│       ├── 03_clustering_priorizacion/kmeans_y_priorizacion_unidad2.ipynb # PCA, K-Means, umbrales y triage
-│       └── README.md                           # Informe técnico completo de la Unidad 2
-├── artifacts/                                  # Modelos y preprocesadores serializados (.joblib, .json)
-│   ├── preprocessor.joblib                     # Pipeline ColumnTransformer de la Unidad 1
-│   ├── baseline_logistic_regression.joblib     # Modelo logístico balanceado de la Unidad 1
-│   ├── linear_regression_comparison.joblib     # Modelo OLS de la Unidad 1
-│   ├── evaluation_metrics.json                 # Métricas cuantitativas del baseline en Test 2019
-│   ├── preprocessor_unidad2.joblib             # Pipeline ColumnTransformer de la Unidad 2
-│   ├── modelo_unidad2_seleccionado.joblib      # Modelo ganador U2 (HistGradientBoostingClassifier)
-│   └── metadatos_ejecucion_unidad2.json        # Metadatos reproducibles del entrenamiento U2
-├── data/
-│   ├── DATA IBM/                               # Dataset fuente original (¡Solo lectura!)
-│   │   └── card_transaction.v1.csv             # 24,386,900 transacciones crudas (2.19 GB)
-│   ├── processed/                              # Datos preprocesados, reportes y métricas reproducibles
-│   │   ├── ingesta_resumen.json                # Resumen de verificación estructural de datos
-│   │   ├── auditoria_importes_y_etiquetas.csv  # Auditoría exhaustiva de Amount (>0, <0, ==0)
-│   │   ├── resumen_particiones.csv             # Conteo y prevalencia de Train (2017-18) y Test (2019)
-│   │   ├── clean_transactions.parquet          # Dataset limpio consolidado
-│   │   ├── train_split.parquet                 # Partición Train U1 (252,670 filas)
-│   │   ├── test_split.parquet                  # Partición Test U1 y U2 (1,639,673 filas)
-│   │   ├── train_u2.parquet                    # Partición Train U2 con variables enriquecidas
-│   │   ├── test_u2.parquet                     # Partición Test U2 con variables enriquecidas
-│   │   ├── sample_inference.csv                # Muestra ciega de 1,000 txns para inferencia
-│   │   ├── metricas_5fold_detalle.csv          # Detalle por pliegue del benchmark de 7 modelos
-│   │   ├── benchmark_modelos.csv               # Resumen del benchmark en validación temporal
-│   │   ├── metricas_prueba_final.csv           # Evaluación en Test Independiente 2019
-│   │   ├── importancia_variables.csv           # Ranking de variables por Permutation Importance
-│   │   ├── perfiles_clusters.csv               # Caracterización de clusters y tasas de fraude
-│   │   └── optimizacion_umbral.csv             # Curva de sensibilidad de umbrales operativos
-│   └── predictions/                            # Salidas de inferencia y priorización para analistas
-│       ├── inference_results.csv               # Puntuación de inferencia baseline U1
-│       └── transacciones_priorizadas.csv       # Triage operativo final U2 con recomendaciones
-├── scripts/                                    # Automatización y reproducibilidad
-│   └── verify_all.py                           # Validador integral de los 10 notebooks y artefactos
-├── informe_validacion_unidad1.md               # Informe técnico auditado de la Unidad 1
-├── requirements.txt                            # Dependencias fijadas del proyecto
-└── README.md                                   # Guía principal del proyecto
+│   ├── UNIDAD 1/                     # Ingesta, exploración y modelos de referencia
+│   ├── UNIDAD 2/                     # Comparación de modelos y segmentación
+│   └── _comun/                       # Configuración y transformaciones reutilizadas
+├── artifacts/                        # Modelos y métricas de las Unidades 1 y 2
+├── data/                             # Ubicación local del dataset y los datos generados
+├── scripts/                          # Generación y validación de notebooks
+├── test/                             # Comprobación del entorno
+└── requirements.txt                  # Dependencias de las Unidades 1 y 2
 ```
-
----
 
 ## 📊 Dataset Principal: IBM TabFormer
 
@@ -133,7 +102,7 @@ iaupeu/
 
 ---
 
-## 🛠️ Instalación y Verificación
+## Instalación y verificación de las Unidades 1 y 2
 
 ### 1. Configuración del Entorno
 ```bash

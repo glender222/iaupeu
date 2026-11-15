@@ -24,9 +24,12 @@ def caracteristicas(transacciones):
     return add_u2_engineered_features(categorias).select(SELECTED_FEATURES_U2)
 
 
-def transaccion(fecha, hora, monto, modalidad, estado, mcc):
-    dia = date.fromisoformat(fecha.strip())
-    momento = time.fromisoformat(hora.strip())
+def registro_transaccion(fecha, hora, monto, modalidad, estado, mcc):
+    try:
+        dia = date.fromisoformat((fecha or "").strip())
+        momento = time.fromisoformat((hora or "").strip())
+    except ValueError as error:
+        raise ValueError("Ingresa una fecha y una hora local válidas (AAAA-MM-DD y HH:MM).") from error
     monto = float(monto)
     mcc = float(mcc)
     if momento.tzinfo is not None or momento.second or momento.microsecond:
@@ -37,12 +40,15 @@ def transaccion(fecha, hora, monto, modalidad, estado, mcc):
         raise ValueError("Selecciona una modalidad válida.")
     if not mcc.is_integer() or not 0 <= mcc <= 9999:
         raise ValueError("El MCC debe ser un entero entre 0000 y 9999.")
-    return pl.DataFrame(
-        [(dia.year, dia.month, dia.day, momento.strftime("%H:%M"), monto,
-          modalidad, (estado or "").strip().upper(), int(mcc))],
-        schema=CAMPOS,
-        orient="row",
+    return (
+        dia.year, dia.month, dia.day, momento.strftime("%H:%M"), monto,
+        modalidad, (estado or "").strip().upper(), int(mcc),
     )
+
+
+def transaccion(fecha, hora, monto, modalidad, estado, mcc):
+    registro = registro_transaccion(fecha, hora, monto, modalidad, estado, mcc)
+    return pl.DataFrame([registro], schema=CAMPOS, orient="row")
 
 
 def cargar_particiones(origen: Path):

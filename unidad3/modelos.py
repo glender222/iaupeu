@@ -5,6 +5,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import polars as pl
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -65,26 +66,38 @@ class Prototipo:
 
     def evaluar(self, nombre, fecha, hora, monto, modalidad, estado, mcc):
         datos = transaccion(fecha, hora, monto, modalidad, estado, mcc)
-        if datos.item(0, "Amount") <= 0:
-            return {
-                "puntuacion": None,
-                "prioridad": "Fuera del alcance",
-                "accion": "Derivar a revisión de reembolsos, contracargos u operaciones de importe cero.",
-            }
-        preparados = self.preparador.transform(caracteristicas(datos).to_pandas()).astype(np.float32)
+        return self.evaluar_transacciones(nombre, datos)[0]
+
+    def evaluar_transacciones(self, nombre, datos):
+        """Evalúa registros validados en orden con una pasada por el modelo."""
+        umbral = self.metricas["modelos"][nombre]["umbral_operativo"]
+        compras = datos.filter(pl.col("Amount") > 0)
+        scores = iter(self._puntuaciones_compras(nombre, compras)) if compras.height else iter(())
+        resultados = []
+        for monto in datos["Amount"]:
+            if monto <= 0:
+                resultados.append({
+                    "puntuacion": None,
+                    "prioridad": "Fuera del alcance",
+                    "accion": "Derivar a revisión de reembolsos, contracargos u operaciones de importe cero.",
+                })
+                continue
+            score = float(next(scores))
+            revision = score >= umbral
+            resultados.append({
+                "puntuacion": score,
+                "umbral": umbral,
+                "prioridad": "Revisión prioritaria" if revision else "Seguimiento habitual",
+                "accion": (
+                    "Enviar a un analista para verificar la operación."
+                    if revision else "Continuar el flujo habitual y conservar el registro."
+                ),
+            })
+        return resultados
+
+    def _puntuaciones_compras(self, nombre, compras):
+        preparados = self.preparador.transform(caracteristicas(compras).to_pandas()).astype(np.float32)
         modelo = self.modelos[nombre]
         if nombre == MLP:
-            score = float(modelo(preparados, training=False).numpy().item())
-        else:
-            score = float(puntuaciones(nombre, modelo, preparados).item())
-        umbral = self.metricas["modelos"][nombre]["umbral_operativo"]
-        revision = score >= umbral
-        return {
-            "puntuacion": score,
-            "umbral": umbral,
-            "prioridad": "Revisión prioritaria" if revision else "Seguimiento habitual",
-            "accion": (
-                "Enviar a un analista para verificar la operación."
-                if revision else "Continuar el flujo habitual y conservar el registro."
-            ),
-        }
+            return modelo(preparados, training=False).numpy().reshape(-1)
+        return puntuaciones(nombre, modelo, preparados)
