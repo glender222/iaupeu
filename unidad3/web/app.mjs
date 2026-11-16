@@ -1,5 +1,6 @@
 import { evaluar, MLP, HGB } from "./inferencia.mjs";
 import { evaluarCsv, resultadosCsv, MAX_BYTES } from "./csv.mjs";
+import { conectarResultados } from "./resultados.mjs";
 
 const porId = id => document.getElementById(id);
 const formulario = porId("transaccion");
@@ -80,36 +81,10 @@ function llenarMetricas(evaluacion) {
   }
 }
 
-function mostrarLote(filas, modelo) {
-  const errores = filas.filter(fila => fila.error).length;
-  const derivados = filas.filter(fila => fila.puntuacion === null).length;
-  const priorizados = filas.filter(fila => fila.prioridad === "Revisión prioritaria").length;
-  const habituales = filas.length - errores - derivados - priorizados;
-  const cantidad = (valor, singular, plural) => entero.format(valor) + " " + (valor === 1 ? singular : plural);
-  porId("resumen-lote").textContent = [
-    modelo, cantidad(filas.length, "registro", "registros"),
-    cantidad(priorizados, "prioritario", "prioritarios"), cantidad(habituales, "habitual", "habituales"),
-    entero.format(derivados) + " fuera del alcance", entero.format(errores) + " con errores",
-  ].join(" · ");
-
-  const tabla = porId("filas-lote");
-  tabla.replaceChildren();
-  const vistaPrevia = filas.slice(0, 20);
-  for (const fila of vistaPrevia) {
-    const celdas = [fila.registro, fila.fecha ?? "—", fila.monto == null ? "—" : decimal.format(fila.monto),
-      fila.puntuacion == null ? "—" : decimal.format(fila.puntuacion * 100),
-      fila.prioridad ?? "Dato inválido", fila.error ?? fila.accion];
-    const renglon = tabla.insertRow();
-    for (const valor of celdas) renglon.insertCell().textContent = valor;
-  }
-  porId("limite-vista").textContent = filas.length > vistaPrevia.length
-    ? "Vista de los primeros 20 registros. El CSV de resultados incluye el lote completo." : "";
-  resultadoLote.hidden = false;
-}
-
 function conectarLote(artefactos) {
   const campoArchivo = formularioLote.elements.namedItem("archivo");
   const campoModelo = formularioLote.elements.namedItem("modelo");
+  const mostrarLote = conectarResultados(resultadoLote);
   let evaluacion = null;
 
   formularioLote.addEventListener("change", () => {
@@ -131,7 +106,7 @@ function conectarLote(artefactos) {
       if (archivo.size > MAX_BYTES) throw new Error("El archivo supera 5 MB. Divide las transacciones en varios CSV.");
       const filas = evaluarCsv(await archivo.text(), modelo, artefactos);
       evaluacion = { filas, modelo };
-      mostrarLote(filas, modelo);
+      mostrarLote(filas, modelo, artefactos.evaluacion.modelos[modelo].umbral_operativo);
     } catch (error) {
       errorLote.textContent = error.message;
       errorLote.hidden = false;

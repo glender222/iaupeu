@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Prototipo de la Unidad 3 de Inteligencia Artificial de la UPeU para evaluar transacciones con IBM TabFormer.">
   <title>Detección de fraude con tarjeta · UPeU</title>
-  <link rel="stylesheet" href="estilos.css?v=2">
+  <link rel="stylesheet" href="estilos.css?v=3">
 </head>
 <body>
   <header class="top">
@@ -96,13 +96,33 @@
       <section class="panel transaction batch-result" id="resultado-lote" aria-labelledby="titulo-lote" hidden>
         <div class="form-head"><h2 id="titulo-lote">Resultados del lote</h2><button type="button" class="text-button" id="descargar-lote">Descargar resultados CSV</button></div>
         <p class="batch-help" id="resumen-lote" role="status"></p>
-        <div class="table-wrap" tabindex="0" role="region" aria-label="Resultados por registro">
-          <table class="batch-table">
-            <thead><tr><th scope="col">Registro</th><th scope="col">Fecha</th><th scope="col">Importe (USD)</th><th scope="col">Puntuación / 100</th><th scope="col">Prioridad</th><th scope="col">Acción o error</th></tr></thead>
-            <tbody id="filas-lote"></tbody>
-          </table>
+        <div class="batch-groups" id="grupos-lote" role="group" aria-label="Filtrar por resultado"></div>
+        <div class="batch-layout">
+          <section class="batch-panel" aria-labelledby="titulo-mapa">
+            <h3 id="titulo-mapa">Mapa de riesgo</h3>
+            <p class="batch-caption">Puntaje de riesgo / 100</p>
+            <canvas id="mapa-lote" role="img" aria-label="Puntaje por importe. Rombos para revisión prioritaria y círculos para seguimiento habitual. Usa la tabla para seleccionar registros con el teclado."></canvas>
+            <p class="batch-axis">Importe en USD · escala logarítmica</p>
+            <p class="batch-selection" id="detalle-lote" aria-live="polite"></p>
+          </section>
+          <section class="batch-panel" aria-labelledby="titulo-tabla">
+            <h3 id="titulo-tabla">Transacciones</h3>
+            <p class="batch-caption">Ordenadas por puntaje de mayor a menor</p>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Resultados por registro">
+              <table class="batch-table">
+                <thead><tr><th scope="col">Registro</th><th scope="col">Importe</th><th scope="col">Puntaje</th><th scope="col">Resultado</th></tr></thead>
+                <tbody id="filas-lote"></tbody>
+              </table>
+            </div>
+            <nav class="batch-pagination" aria-label="Páginas de resultados">
+              <span id="limite-vista" aria-live="polite"></span>
+              <div>
+                <button type="button" id="lote-anterior" aria-label="Página anterior">‹</button>
+                <button type="button" id="lote-siguiente" aria-label="Página siguiente">›</button>
+              </div>
+            </nav>
+          </section>
         </div>
-        <p class="note" id="limite-vista"></p>
       </section>
     </div>
     <details class="panel benchmark">
@@ -116,6 +136,6 @@
       <p>Los umbrales se fijaron con datos de noviembre y diciembre de 2018 para derivar a revisión cerca del 5 % de las compras.</p>
     </details>
   </main>
-  <script src="app.mjs?v=2" type="module"></script>
+  <script src="app.mjs?v=3" type="module"></script>
 </body>
 </html>

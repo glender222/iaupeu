@@ -17,4 +17,5 @@ jobs:
           node --check unidad3/web/app.mjs
           node --check unidad3/web/csv.mjs
           node --check unidad3/web/inferencia.mjs
+          node --check unidad3/web/resultados.mjs
           node unidad3/despliegue/verificar.mjs
