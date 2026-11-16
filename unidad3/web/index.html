@@ -4,27 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Prototipo de la Unidad 3 de Inteligencia Artificial de la UPeU para evaluar transacciones con IBM TabFormer.">
-  <title>Detección de fraude con tarjeta · UPeU</title>
-  <link rel="stylesheet" href="estilos.css?v=3">
+  <title>Análisis de transacciones · UPeU</title>
+  <link rel="stylesheet" href="estilos.css?v=4">
 </head>
 <body>
   <header class="top">
     <div class="shell top-inner">
-      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span> UPeU <span class="divider"></span> Inteligencia Artificial</a>
+      <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">U</span><span>UPeU <small>Inteligencia Artificial</small></span></a>
       <a class="repo" href="https://github.com/glender222/iaupeu/tree/main/unidad3/web" target="_blank" rel="noopener">Repositorio</a>
     </div>
   </header>
   <main class="shell">
     <section class="intro" aria-labelledby="titulo">
-      <p class="kicker">Unidad 3 <span aria-hidden="true">/</span> IBM TabFormer</p>
-      <h1 id="titulo">Detección de fraude<br class="hero-break"> con tarjeta</h1>
-      <p class="intro-text">Ingresa una compra o carga tus transacciones en CSV. Puedes evaluarlas con la MLP de la clase o con HistGradientBoosting, el modelo del equipo.</p>
+      <p class="kicker">Monitoreo de fraude</p>
+      <h1 id="titulo">Análisis de transacciones</h1>
+      <p class="intro-text">Evalúa una compra o revisa un lote para identificar qué operaciones requieren atención.</p>
     </section>
     <nav class="modes" aria-label="Modo de evaluación">
-      <button type="button" data-modo="entrada-manual" aria-controls="entrada-manual" aria-pressed="true">Ingreso manual</button>
-      <button type="button" data-modo="entrada-csv" aria-controls="entrada-csv" aria-pressed="false">Cargar CSV</button>
+      <button type="button" data-modo="entrada-manual" aria-controls="entrada-manual" aria-pressed="false">Una transacción</button>
+      <button type="button" data-modo="entrada-csv" aria-controls="entrada-csv" aria-pressed="true">Lote CSV</button>
     </nav>
-    <div class="workbench" id="entrada-manual">
+    <div class="workbench" id="entrada-manual" hidden>
       <form class="panel transaction" id="transaccion">
         <div class="form-head"><h2>Nueva transacción</h2><button type="reset" class="text-button">Limpiar campos</button></div>
         <fieldset class="model-select">
@@ -78,28 +78,30 @@
         <p class="note">La puntuación sirve para priorizar la revisión humana. Los modelos producen puntuaciones sin calibración probabilística.</p>
       </section>
     </div>
-    <div class="batch" id="entrada-csv" hidden>
+    <div class="batch" id="entrada-csv">
       <form class="panel transaction batch-form" id="lote">
-        <div class="form-head"><h2>Evaluar un archivo CSV</h2><a class="text-button" href="plantilla_transacciones.csv" download>Descargar plantilla CSV</a></div>
-        <p class="batch-help" id="csv-ayuda">Usa la plantilla o las columnas originales de TabFormer. Puedes cargar hasta 10 000 transacciones en un archivo de hasta 5 MB.</p>
+        <div class="form-head"><h2>Evaluar un lote</h2><a class="text-button" href="plantilla_transacciones.csv" download>Descargar plantilla</a></div>
         <div class="fields">
           <label>Archivo CSV<input type="file" name="archivo" accept=".csv,text/csv" aria-describedby="csv-ayuda" required></label>
           <label>Modelo<select name="modelo">
-            <option value="HistGradientBoosting">HistGradientBoosting · Modelo del equipo</option>
-            <option value="MLP">MLP · Red de la clase</option>
+            <option value="HistGradientBoosting">HistGradientBoosting</option>
+            <option value="MLP">MLP</option>
           </select></label>
+          <button class="primary" id="evaluar-lote" type="submit" disabled>Cargando modelos…</button>
         </div>
-        <p class="note">El navegador procesa el archivo en tu equipo.</p>
+        <div class="batch-form-footer">
+          <p class="note" id="csv-ayuda">Máximo de 10 000 filas y 5 MB por archivo. El archivo se procesa en tu navegador.</p>
+          <button id="cargar-ejemplo" class="text-button" type="button" disabled>Ver lote de ejemplo</button>
+        </div>
         <p class="error" id="lote-error" role="alert" hidden></p>
-        <button class="primary" id="evaluar-lote" type="submit" disabled>Cargando modelos…</button>
       </form>
       <section class="panel transaction batch-result" id="resultado-lote" aria-labelledby="titulo-lote" hidden>
-        <div class="form-head"><h2 id="titulo-lote">Resultados del lote</h2><button type="button" class="text-button" id="descargar-lote">Descargar resultados CSV</button></div>
+        <div class="form-head"><h2 id="titulo-lote">Resultados del lote</h2><button type="button" class="secondary" id="descargar-lote">Descargar CSV</button></div>
         <p class="batch-help" id="resumen-lote" role="status"></p>
         <div class="batch-groups" id="grupos-lote" role="group" aria-label="Filtrar por resultado"></div>
         <div class="batch-layout">
           <section class="batch-panel" aria-labelledby="titulo-mapa">
-            <h3 id="titulo-mapa">Mapa de riesgo</h3>
+            <h3 id="titulo-mapa">Riesgo por importe</h3>
             <p class="batch-caption">Puntaje de riesgo / 100</p>
             <canvas id="mapa-lote" role="img" aria-label="Puntaje por importe. Rombos para revisión prioritaria y círculos para seguimiento habitual. Usa la tabla para seleccionar registros con el teclado."></canvas>
             <p class="batch-axis">Importe en USD · escala logarítmica</p>
@@ -107,7 +109,7 @@
           </section>
           <section class="batch-panel" aria-labelledby="titulo-tabla">
             <h3 id="titulo-tabla">Transacciones</h3>
-            <p class="batch-caption">Ordenadas por puntaje de mayor a menor</p>
+            <p class="batch-caption">De mayor a menor puntaje</p>
             <div class="table-wrap" tabindex="0" role="region" aria-label="Resultados por registro">
               <table class="batch-table">
                 <thead><tr><th scope="col">Registro</th><th scope="col">Importe</th><th scope="col">Puntaje</th><th scope="col">Resultado</th></tr></thead>
@@ -126,7 +128,7 @@
       </section>
     </div>
     <details class="panel benchmark">
-      <summary>Resultados sobre 1 639 673 compras de 2019</summary>
+      <summary>Evaluación de los modelos</summary>
       <div class="table-wrap">
         <table>
           <thead><tr><th scope="col">Modelo</th><th scope="col">Average Precision</th><th scope="col">ROC-AUC</th><th scope="col">Fraudes detectados</th><th scope="col">Recall</th><th scope="col">Precisión de alertas</th></tr></thead>
@@ -136,6 +138,6 @@
       <p>Los umbrales se fijaron con datos de noviembre y diciembre de 2018 para derivar a revisión cerca del 5 % de las compras.</p>
     </details>
   </main>
-  <script src="app.mjs?v=3" type="module"></script>
+  <script src="app.mjs?v=4" type="module"></script>
 </body>
 </html>

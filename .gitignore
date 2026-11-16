@@ -62,3 +62,4 @@ bank_fraud.csv
 # CSV incluidos para probar las demos de Unidad 3
 !unidad3/ejemplos/transacciones_prueba.csv
 !unidad3/web/plantilla_transacciones.csv
+!unidad3/web/lote_ejemplo.csv

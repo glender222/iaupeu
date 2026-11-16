@@ -1,6 +1,6 @@
 import { evaluar, MLP, HGB } from "./inferencia.mjs";
 import { evaluarCsv, resultadosCsv, MAX_BYTES } from "./csv.mjs";
-import { conectarResultados } from "./resultados.mjs";
+import { conectarResultados } from "./resultados.mjs?v=4";
 
 const porId = id => document.getElementById(id);
 const formulario = porId("transaccion");
@@ -85,6 +85,7 @@ function conectarLote(artefactos) {
   const campoArchivo = formularioLote.elements.namedItem("archivo");
   const campoModelo = formularioLote.elements.namedItem("modelo");
   const mostrarLote = conectarResultados(resultadoLote);
+  const botonEjemplo = porId("cargar-ejemplo");
   let evaluacion = null;
 
   formularioLote.addEventListener("change", () => {
@@ -92,29 +93,45 @@ function conectarLote(artefactos) {
     resultadoLote.hidden = true;
     errorLote.hidden = true;
   });
-  formularioLote.addEventListener("submit", async evento => {
-    evento.preventDefault();
-    const archivo = campoArchivo.files[0];
-    if (!archivo) return;
+  async function procesar(leer, ejemplo = false) {
     const modelo = campoModelo.value;
     evaluacion = null;
     resultadoLote.hidden = true;
     errorLote.hidden = true;
-    botonLote.disabled = campoArchivo.disabled = campoModelo.disabled = true;
-    botonLote.textContent = "Evaluando archivo…";
+    botonLote.disabled = campoArchivo.disabled = campoModelo.disabled = botonEjemplo.disabled = true;
+    botonLote.textContent = "Evaluando…";
     try {
-      if (archivo.size > MAX_BYTES) throw new Error("El archivo supera 5 MB. Divide las transacciones en varios CSV.");
-      const filas = evaluarCsv(await archivo.text(), modelo, artefactos);
+      const filas = evaluarCsv(await leer(), modelo, artefactos);
+      mostrarLote(filas, ejemplo ? modelo + " · Datos ficticios de muestra" : modelo,
+        artefactos.evaluacion.modelos[modelo].umbral_operativo);
       evaluacion = { filas, modelo };
-      mostrarLote(filas, modelo, artefactos.evaluacion.modelos[modelo].umbral_operativo);
     } catch (error) {
       errorLote.textContent = error.message;
       errorLote.hidden = false;
     } finally {
       botonLote.textContent = "Evaluar archivo";
-      botonLote.disabled = campoArchivo.disabled = campoModelo.disabled = false;
+      botonLote.disabled = campoArchivo.disabled = campoModelo.disabled = botonEjemplo.disabled = false;
     }
+  }
+
+  formularioLote.addEventListener("submit", evento => {
+    evento.preventDefault();
+    const archivo = campoArchivo.files[0];
+    if (!archivo) return;
+    procesar(() => {
+      if (archivo.size > MAX_BYTES) throw new Error("El archivo supera 5 MB. Divide las transacciones en varios CSV.");
+      return archivo.text();
+    });
   });
+  function cargarEjemplo() {
+    campoArchivo.value = "";
+    return procesar(async () => {
+      const respuesta = await fetch("./lote_ejemplo.csv");
+      if (!respuesta.ok) throw new Error("El lote de ejemplo no está disponible.");
+      return respuesta.text();
+    }, true);
+  }
+  botonEjemplo.addEventListener("click", cargarEjemplo);
   porId("descargar-lote").addEventListener("click", () => {
     if (!evaluacion) return;
     const { filas, modelo } = evaluacion;
@@ -125,8 +142,7 @@ function conectarLote(artefactos) {
     enlace.click();
     setTimeout(() => URL.revokeObjectURL(enlace.href), 1000);
   });
-  botonLote.textContent = "Evaluar archivo";
-  botonLote.disabled = false;
+  cargarEjemplo();
 }
 
 async function iniciar() {

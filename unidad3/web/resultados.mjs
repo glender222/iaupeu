@@ -30,7 +30,7 @@ function marca(ctx, { x, y, grupo }, activa, visible) {
   const prioritaria = grupo === "prioritaria";
   const radio = activa ? 6 : prioritaria ? 4.5 : 3.5;
   ctx.globalAlpha = visible ? activa ? 1 : 0.8 : 0.18;
-  ctx.fillStyle = prioritaria ? "#ff9fa5" : "#8cc7ff";
+  ctx.fillStyle = prioritaria ? "#a6382c" : "#3e6789";
   ctx.beginPath();
   if (prioritaria) {
     ctx.moveTo(x, y - radio);
@@ -43,7 +43,7 @@ function marca(ctx, { x, y, grupo }, activa, visible) {
   }
   ctx.fill();
   if (activa) {
-    ctx.strokeStyle = "#edf2ff";
+    ctx.strokeStyle = "#273342";
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -60,7 +60,7 @@ function dibujar(canvas, puntuadas, umbral, filtro, seleccion) {
   if (!ctx) return [];
   ctx.scale(dpr, dpr);
   ctx.font = "12px system-ui";
-  ctx.fillStyle = "#a8b6cf";
+  ctx.fillStyle = "#58616e";
   if (!puntuadas.length) {
     ctx.textAlign = "center";
     ctx.fillText("Este lote no tiene compras con puntaje.", ancho / 2, alto / 2, ancho - 12);
@@ -77,20 +77,20 @@ function dibujar(canvas, puntuadas, umbral, filtro, seleccion) {
   const y = score => abajo - score * (abajo - arriba);
   const corte = y(umbral);
 
-  ctx.fillStyle = "#42283a";
+  ctx.fillStyle = "#f7ebe6";
   ctx.fillRect(izquierda, arriba, anchoGrafico, corte - arriba);
-  ctx.fillStyle = "#203451";
+  ctx.fillStyle = "#f2f5f7";
   ctx.fillRect(izquierda, corte, anchoGrafico, abajo - corte);
   for (const nivel of [0, 25, 50, 75, 100]) {
     const altura = y(nivel / 100);
-    ctx.fillStyle = "#a8b6cf";
+    ctx.fillStyle = "#58616e";
     ctx.textAlign = "right";
     ctx.fillText(nivel, izquierda - 7, altura + 4);
-    ctx.fillStyle = "#384861";
+    ctx.fillStyle = "#dce3e7";
     ctx.fillRect(izquierda, altura, anchoGrafico, 1);
   }
   const intervalo = ancho < 360 ? 3 : 4;
-  ctx.fillStyle = "#a8b6cf";
+  ctx.fillStyle = "#58616e";
   ctx.textAlign = "center";
   for (let i = 0; i <= intervalo; i++) {
     const valor = 10 ** (minimo + (maximo - minimo) * i / intervalo);
@@ -99,14 +99,14 @@ function dibujar(canvas, puntuadas, umbral, filtro, seleccion) {
     const x = izquierda + ((Math.log10(valor) - desde) / (hasta - desde)) * anchoGrafico;
     ctx.fillText(etiquetaImporte(valor), Math.max(21, Math.min(ancho - 23, x)), abajo + 18, 48);
   }
-  ctx.strokeStyle = "#ff9fa5";
+  ctx.strokeStyle = "#a6382c";
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
   ctx.moveTo(izquierda, corte);
   ctx.lineTo(derecha, corte);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = "#ffd1d4";
+  ctx.fillStyle = "#8d3329";
   ctx.textAlign = "left";
   ctx.fillText("Umbral " + decimal.format(umbral * 100), izquierda + 7, Math.max(arriba + 13, corte - 6));
 
