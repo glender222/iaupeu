@@ -1,0 +1,20 @@
+name: Validar demo de fraude
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar sintaxis y comportamiento de la demo
+        run: |
+          node --check unidad3/web/app.mjs
+          node --check unidad3/web/csv.mjs
+          node --check unidad3/web/inferencia.mjs
+          node unidad3/despliegue/verificar.mjs
